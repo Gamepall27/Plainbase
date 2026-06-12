@@ -4,6 +4,7 @@ import type { RightPanelTab, TicketFilter } from "./app/types";
 import { AdminToolsPanel } from "./components/admin/AdminToolsPanel";
 import { DocumentWorkspace } from "./components/document/DocumentWorkspace";
 import { AppTopbar } from "./components/layout/AppTopbar";
+import { SettingsDialog } from "./components/layout/SettingsDialog";
 import { FeatureStrip } from "./components/layout/FeatureStrip";
 import { RightSidebar } from "./components/right-panel/RightSidebar";
 import { LeftSidebar } from "./components/sidebar/LeftSidebar";
@@ -12,10 +13,19 @@ import { buildSidebarFolders } from "./lib/sidebar-model";
 
 export function App() {
   const { actions, data, permissions, state } = useWorkspaceApp();
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    getInitialTheme()
+  );
   const [activePanelTab, setActivePanelTab] = useState<RightPanelTab>("tickets");
   const [ticketFilter, setTicketFilter] = useState<TicketFilter>("Open");
   const [showSourceEditor, setShowSourceEditor] = useState(false);
   const [isAdminToolsOpen, setIsAdminToolsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("plainbase-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!permissions.mayManageUsers && isAdminToolsOpen) {
@@ -23,9 +33,9 @@ export function App() {
     }
   }, [isAdminToolsOpen, permissions.mayManageUsers]);
 
-  const documentFolders = buildSidebarFolders(data.documents);
+  const documentFolders = buildSidebarFolders(data.documents, state.draft);
   const currentTabTitle =
-    state.draft?.title.trim() || data.selectedDocument?.title || "Welcome";
+    state.draft?.title.trim() || data.selectedDocument?.title || "Neues Objekt";
   const linkedDocuments = data.documents
     .filter((document) => document.id !== state.selectedDocumentId)
     .slice(0, 3);
@@ -39,8 +49,11 @@ export function App() {
 
   function handleNewDocument() {
     setIsAdminToolsOpen(false);
-    actions.createDocumentDraft();
-    setShowSourceEditor(true);
+    void actions.createDocument().then((created) => {
+      if (created) {
+        setShowSourceEditor(true);
+      }
+    });
   }
 
   function handleOpenAdminTools() {
@@ -54,6 +67,7 @@ export function App() {
         demoUserState={state.demoUserState}
         roleSwitchStatus={state.roleSwitchStatus}
         selectedWorkspace={data.selectedWorkspace}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onSignIn={(identifier, password) =>
           actions.signIn(identifier, password)
         }
@@ -77,6 +91,7 @@ export function App() {
           onAddonToggle={(addonId) => void actions.toggleAddon(addonId)}
           onDocumentSelect={actions.setSelectedDocumentId}
           onNewDocument={handleNewDocument}
+          onOpenSettings={() => setIsSettingsOpen(true)}
           onWorkspaceSelect={actions.setSelectedWorkspaceId}
         />
 
@@ -134,7 +149,34 @@ export function App() {
         />
       </div>
 
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        selectedWorkspace={data.selectedWorkspace}
+        theme={theme}
+        demoAuth={state.demoUserState.status === "success" ? state.demoUserState.data : null}
+        onClose={() => setIsSettingsOpen(false)}
+        onThemeToggle={() =>
+          setTheme((current) => (current === "light" ? "dark" : "light"))
+        }
+      />
+
       <FeatureStrip />
     </div>
   );
+}
+
+function getInitialTheme() {
+  if (typeof window === "undefined") {
+    return "light" as const;
+  }
+
+  const storedTheme = window.localStorage.getItem("plainbase-theme");
+
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }

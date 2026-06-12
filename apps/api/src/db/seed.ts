@@ -52,81 +52,19 @@ const users: User[] = [
   }
 ];
 
-const documents: Document[] = [
-  {
-    id: "document-welcome",
-    workspaceId: "workspace-demo-company",
-    parentId: null,
-    title: "Welcome",
-    slug: "welcome",
-    content: [
-      "# Welcome",
-      "",
-      "This workspace contains starter knowledge for Demo Company.",
-      "",
-      "- Company handbook links",
-      "- Current priorities",
-      "- Team onboarding notes"
-    ].join("\n"),
-    createdAt: "2026-01-10T09:15:00.000Z",
-    updatedAt: "2026-01-10T09:15:00.000Z",
-    createdByUserId: "user-admin",
-    updatedByUserId: "user-admin"
-  },
-  {
-    id: "document-engineering-notes",
-    workspaceId: "workspace-demo-company",
-    parentId: null,
-    title: "Engineering Notes",
-    slug: "engineering-notes",
-    content: [
-      "# Engineering Notes",
-      "",
-      "## Platform",
-      "- API: Express + SQLite",
-      "- Frontend: React + Vite",
-      "",
-      "## Diagram Example",
-      "```diagram",
-      "API -> Registry",
-      "Registry -> Addon",
-      "```",
-      "",
-      "## Open Questions",
-      "- How should add-ons be versioned?",
-      "- Which documents should become templates?"
-    ].join("\n"),
-    createdAt: "2026-01-11T11:00:00.000Z",
-    updatedAt: "2026-01-12T08:30:00.000Z",
-    createdByUserId: "user-editor",
-    updatedByUserId: "user-editor"
-  },
-  {
-    id: "document-meeting-notes",
-    workspaceId: "workspace-demo-company",
-    parentId: "document-engineering-notes",
-    title: "Meeting Notes",
-    slug: "meeting-notes",
-    content: [
-      "# Meeting Notes",
-      "",
-      "## Sprint Planning",
-      "- Finalize SQLite bootstrap",
-      "- Add ticket overview to the dashboard",
-      "- Review add-on loading flow"
-    ].join("\n"),
-    createdAt: "2026-01-12T09:00:00.000Z",
-    updatedAt: "2026-01-12T09:45:00.000Z",
-    createdByUserId: "user-editor",
-    updatedByUserId: "user-editor"
-  }
+const documents: Document[] = [];
+
+const legacySeedDocumentIds = [
+  "document-welcome",
+  "document-engineering-notes",
+  "document-meeting-notes"
 ];
 
 const tickets: Ticket[] = [
   {
     id: "ticket-doc-review",
     workspaceId: "workspace-demo-company",
-    documentId: "document-welcome",
+    documentId: null,
     title: "Review welcome document copy",
     description:
       "Polish the onboarding text and add links to the most important starter pages.",
@@ -139,7 +77,7 @@ const tickets: Ticket[] = [
   {
     id: "ticket-diagram-addon",
     workspaceId: "workspace-demo-company",
-    documentId: "document-engineering-notes",
+    documentId: null,
     title: "Document diagram addon rollout",
     description:
       "Capture how the Diagrams addon should be enabled and referenced in engineering docs.",
@@ -325,6 +263,10 @@ export function seedDatabase(database: DatabaseSync) {
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `);
+  const deleteLegacyDocument = database.prepare(`
+    DELETE FROM documents
+    WHERE id = ?
+  `);
 
   database.exec("BEGIN");
 
@@ -353,6 +295,10 @@ export function seedDatabase(database: DatabaseSync) {
         user.roleId,
         user.avatarUrl
       );
+    }
+
+    for (const documentId of legacySeedDocumentIds) {
+      deleteLegacyDocument.run(documentId);
     }
 
     for (const document of documents) {

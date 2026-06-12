@@ -8,7 +8,7 @@ export function createEmptyDraft(workspaceId: string): EditorDraft {
     parentId: null,
     title: "",
     slug: "",
-    content: "# Neues Dokument\n",
+    content: "# Neues Objekt\n",
     isNew: true
   };
 }

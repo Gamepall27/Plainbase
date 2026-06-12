@@ -82,7 +82,6 @@ export function DocumentWorkspace({
           type="button"
           className="document-tab-add"
           onClick={onNewDocument}
-          disabled={!mayCreateDocument}
         >
           +
         </button>
@@ -122,7 +121,21 @@ export function DocumentWorkspace({
               <p className="canvas-eyebrow">
                 {selectedWorkspace?.name ?? "Workspace"}
               </p>
-              <h1 className="canvas-title">{currentTabTitle}</h1>
+              {draft && mayEditDocument ? (
+                <input
+                  className="canvas-title-input"
+                  value={draft.title}
+                  placeholder="Untitled document"
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      title: event.target.value
+                    })
+                  }
+                />
+              ) : (
+                <h1 className="canvas-title">{currentTabTitle}</h1>
+              )}
             </div>
             <div className="canvas-status-stack">
               {mayManageUsers && (

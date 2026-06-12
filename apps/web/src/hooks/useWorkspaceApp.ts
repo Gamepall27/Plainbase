@@ -309,16 +309,43 @@ export function useWorkspaceApp() {
     }
   }
 
-  function createDocumentDraft() {
+  async function createDocument() {
     if (!selectedWorkspaceId) {
-      return;
+      return false;
     }
 
-    setSelectedDocumentId(null);
-    setDocumentState(null);
-    setDraft(createEmptyDraft(selectedWorkspaceId));
-    setHasUnsavedChanges(false);
-    setSaveState({ status: "idle" });
+    setSaveState({ status: "saving" });
+
+    try {
+      const existingDocuments =
+        documentsState.status === "success" ? documentsState.data : [];
+      const { title, slug } = createUniqueDocumentIdentity(existingDocuments);
+      const createdDocument = await apiClient.createDocument({
+        workspaceId: selectedWorkspaceId,
+        parentId: null,
+        title,
+        slug,
+        content: "# Neues Dokument\n"
+      });
+
+      setSelectedDocumentId(createdDocument.id);
+      setDocumentState({ status: "success", data: createdDocument });
+      setDraft(mapDocumentToDraft(createdDocument));
+      setHasUnsavedChanges(false);
+      setSaveState({
+        status: "success",
+        message: `"${createdDocument.title}" wurde angelegt.`
+      });
+
+      await loadWorkspaceData(selectedWorkspaceId);
+      return true;
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
   }
 
   async function saveDocument() {
@@ -597,7 +624,7 @@ export function useWorkspaceApp() {
       signIn,
       changeRole,
       signOut,
-      createDocumentDraft,
+      createDocument,
       saveDocument,
       updateDraft,
       toggleAddon,
@@ -606,4 +633,22 @@ export function useWorkspaceApp() {
       deleteUser
     }
   };
+}
+
+function createUniqueDocumentIdentity(documents: Document[]) {
+  const baseTitle = "Untitled document";
+  const baseSlug = slugify(baseTitle);
+  const existingSlugs = new Set(documents.map((document) => document.slug));
+
+  let index = 1;
+  let title = baseTitle;
+  let slug = baseSlug;
+
+  while (existingSlugs.has(slug)) {
+    index += 1;
+    title = `${baseTitle} ${index}`;
+    slug = `${baseSlug}-${index}`;
+  }
+
+  return { title, slug };
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const defaultDemoPassword = "plainbase";
+export const defaultDemoPassword = "123";
 
 export function hashPassword(password: string) {
   return createHash("sha256").update(password).digest("hex");

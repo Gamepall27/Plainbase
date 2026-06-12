@@ -2,7 +2,7 @@ import type { SidebarPanelContext, SidebarPanelExtension } from "@plainbase/addo
 import type { Addon, Document, Ticket, Workspace } from "@plainbase/shared";
 import type { ReactNode } from "react";
 import type { LoadState, SidebarFolder } from "../../app/types";
-import { quickLinks, staticFolders } from "../../lib/sidebar-model";
+import { quickLinks } from "../../lib/sidebar-model";
 import { SidebarTreeItem } from "./SidebarTreeItem";
 
 type LeftSidebarProps = {
@@ -21,6 +21,7 @@ type LeftSidebarProps = {
   onAddonToggle: (addonId: string) => void;
   onDocumentSelect: (documentId: string) => void;
   onNewDocument: () => void;
+  onOpenSettings: () => void;
   onWorkspaceSelect: (workspaceId: string) => void;
 };
 
@@ -40,6 +41,7 @@ export function LeftSidebar({
   onAddonToggle,
   onDocumentSelect,
   onNewDocument,
+  onOpenSettings,
   onWorkspaceSelect
 }: LeftSidebarProps) {
   return (
@@ -78,12 +80,11 @@ export function LeftSidebar({
 
       <section className="left-panel-card">
         <div className="section-heading-row">
-          <p className="rail-heading">Dokumente</p>
+          <p className="rail-heading">Objekte</p>
           <button
             type="button"
             className="tree-action-button"
             onClick={onNewDocument}
-            disabled={!mayCreateDocument}
           >
             +
           </button>
@@ -95,7 +96,12 @@ export function LeftSidebar({
         )}
         {documentsState.status === "success" && (
           <div className="sidebar-tree">
-            {[...documentFolders, ...staticFolders].map((folder) => (
+            {documentFolders.length === 0 && (
+              <p className="sidebar-copy">
+                Noch keine Objekte vorhanden. Erstelle dein erstes Objekt ueber `+`.
+              </p>
+            )}
+            {documentFolders.map((folder) => (
               <div key={folder.id} className="tree-folder">
                 <div className="tree-folder-label">
                   <span className="tree-chevron">v</span>
@@ -146,7 +152,7 @@ export function LeftSidebar({
         ))}
       </section>
 
-      <button type="button" className="settings-button" disabled>
+      <button type="button" className="settings-button" onClick={onOpenSettings}>
         Einstellungen
       </button>
     </aside>

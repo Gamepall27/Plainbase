@@ -8,6 +8,7 @@ type AppTopbarProps = {
   demoUserState: LoadState<DemoAuth>;
   roleSwitchStatus: SaveState;
   selectedWorkspace: Workspace | null;
+  onOpenSettings: () => void;
   onSignIn: (identifier: string, password: string) => Promise<boolean>;
   onSignOut: () => void;
 };
@@ -17,11 +18,11 @@ export function AppTopbar({
   demoUserState,
   roleSwitchStatus,
   selectedWorkspace,
+  onOpenSettings,
   onSignIn,
   onSignOut
 }: AppTopbarProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({
     identifier: "",
     password: ""
@@ -50,7 +51,6 @@ export function AppTopbar({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsUserMenuOpen(false);
-        setIsProfileDialogOpen(false);
       }
     }
 
@@ -62,24 +62,6 @@ export function AppTopbar({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isUserMenuOpen]);
-
-  useEffect(() => {
-    if (!isProfileDialogOpen) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsProfileDialogOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isProfileDialogOpen]);
 
   async function handleSignInSubmit() {
     const signedIn = await onSignIn(
@@ -98,7 +80,6 @@ export function AppTopbar({
   function handleSignOut() {
     onSignOut();
     setIsUserMenuOpen(false);
-    setIsProfileDialogOpen(false);
   }
 
   return (
@@ -124,10 +105,6 @@ export function AppTopbar({
         </div>
 
         <div className="topbar-icon-row">
-          <button className="topbar-icon-button" type="button">
-            Theme
-          </button>
-
           <div className="topbar-user-menu-shell" ref={userMenuRef}>
             <button
               className={
@@ -179,11 +156,11 @@ export function AppTopbar({
                       className="topbar-user-menu-button"
                       role="menuitem"
                       onClick={() => {
-                        setIsProfileDialogOpen(true);
+                        onOpenSettings();
                         setIsUserMenuOpen(false);
                       }}
                     >
-                      Profileinstellungen
+                      Einstellungen
                     </button>
 
                     <button
@@ -251,7 +228,7 @@ export function AppTopbar({
 
                     <p className="topbar-user-menu-helper">
                       Demo-Logins: `admin`, `editor` oder `viewer`
-                      mit Passwort `plainbase`
+                      mit Passwort `123`
                     </p>
                     {roleSwitchStatus.status === "error" && (
                       <p className="feedback error">{roleSwitchStatus.message}</p>
@@ -270,86 +247,6 @@ export function AppTopbar({
           </button>
         </div>
       </header>
-
-      {isProfileDialogOpen && isDemoUser && (
-        <div
-          className="profile-dialog-backdrop"
-          onClick={() => setIsProfileDialogOpen(false)}
-        >
-          <section
-            className="profile-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-dialog-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="profile-dialog-header">
-              <div className="profile-dialog-identity">
-                <div className="profile-dialog-avatar">
-                  {demoAuth.user.avatarUrl ? (
-                    <img
-                      src={demoAuth.user.avatarUrl}
-                      alt={demoAuth.user.name}
-                      className="topbar-avatar-image"
-                    />
-                  ) : (
-                    getInitials(demoAuth.user.name)
-                  )}
-                </div>
-                <div>
-                  <p className="profile-dialog-kicker">Profil</p>
-                  <h2 id="profile-dialog-title">{demoAuth.user.name}</h2>
-                  <p className="profile-dialog-copy">@{demoAuth.user.username}</p>
-                  <p className="profile-dialog-copy">{demoAuth.user.email}</p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="profile-dialog-close"
-                onClick={() => setIsProfileDialogOpen(false)}
-              >
-                Schliessen
-              </button>
-            </div>
-
-            <div className="profile-dialog-grid">
-              <div className="profile-dialog-card">
-                <span className="profile-dialog-label">Aktive Rolle</span>
-                <strong>{demoAuth.role.name}</strong>
-                <p className="profile-dialog-copy">
-                  Deine Berechtigungen in Plainbase richten sich nach dieser Rolle.
-                </p>
-              </div>
-
-              <div className="profile-dialog-card">
-                <span className="profile-dialog-label">Workspace</span>
-                <strong>{selectedWorkspace?.name ?? "Kein Workspace aktiv"}</strong>
-                <p className="profile-dialog-copy">
-                  Hier siehst du, in welchem Bereich du gerade arbeitest.
-                </p>
-              </div>
-            </div>
-
-            <div className="profile-dialog-actions">
-              <button
-                type="button"
-                className="toolbar-primary-button"
-                onClick={() => setIsProfileDialogOpen(false)}
-              >
-                Zurueck zur App
-              </button>
-              <button
-                type="button"
-                className="toolbar-secondary-button"
-                onClick={handleSignOut}
-              >
-                Abmelden
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
     </>
   );
 }

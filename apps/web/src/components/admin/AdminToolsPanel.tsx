@@ -288,7 +288,7 @@ export function AdminToolsPanel({
               <div>
                 <h3>Nutzerverzeichnis</h3>
                 <p className="sidebar-copy">
-                  Demo-Zugang: `admin`, `editor` oder `viewer` mit Passwort `plainbase`.
+                  Demo-Zugang: `admin`, `editor` oder `viewer` mit Passwort `123`.
                 </p>
               </div>
             </div>

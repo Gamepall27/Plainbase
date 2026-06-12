@@ -1,4 +1,5 @@
 import type { Document } from "@plainbase/shared";
+import type { EditorDraft } from "../editor/types";
 import type { SidebarFolder, SidebarItem } from "../app/types";
 
 export const quickLinks = [
@@ -7,31 +8,10 @@ export const quickLinks = [
   "Kuerzlich geoeffnet"
 ];
 
-export const staticFolders: SidebarFolder[] = [
-  {
-    id: "handbook",
-    title: "Handbuch",
-    items: [
-      { id: "handbook-started", title: "Getting Started", disabled: true },
-      { id: "handbook-rules", title: "Richtlinien", disabled: true }
-    ]
-  },
-  {
-    id: "projects",
-    title: "Projekte",
-    items: [
-      { id: "project-relaunch", title: "Website Relaunch", disabled: true },
-      { id: "project-mobile", title: "Mobile App", disabled: true }
-    ]
-  },
-  {
-    id: "archive",
-    title: "Archiv",
-    items: [{ id: "archive-notes", title: "Alte Notizen", disabled: true }]
-  }
-];
-
-export function buildSidebarFolders(documents: Document[]): SidebarFolder[] {
+export function buildSidebarFolders(
+  documents: Document[],
+  draft: EditorDraft | null
+): SidebarFolder[] {
   const documentMap = new Map<string, SidebarItem>();
 
   for (const document of documents) {
@@ -65,10 +45,22 @@ export function buildSidebarFolders(documents: Document[]): SidebarFolder[] {
     topLevelItems.push(item);
   }
 
+  if (draft?.isNew) {
+    topLevelItems.unshift({
+      id: "draft-object",
+      title: draft.title.trim() || "Neues Objekt",
+      disabled: true
+    });
+  }
+
+  if (topLevelItems.length === 0) {
+    return [];
+  }
+
   return [
     {
       id: "workspace-documents",
-      title: "Willkommen",
+      title: "Eigene Objekte",
       items: topLevelItems
     }
   ];
