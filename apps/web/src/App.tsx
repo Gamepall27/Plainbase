@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SidebarPanelContext } from "@plainbase/addon-sdk";
 import type { RightPanelTab, TicketFilter } from "./app/types";
+import { AdminToolsPanel } from "./components/admin/AdminToolsPanel";
 import { DocumentWorkspace } from "./components/document/DocumentWorkspace";
 import { AppTopbar } from "./components/layout/AppTopbar";
 import { FeatureStrip } from "./components/layout/FeatureStrip";
@@ -14,6 +15,13 @@ export function App() {
   const [activePanelTab, setActivePanelTab] = useState<RightPanelTab>("tickets");
   const [ticketFilter, setTicketFilter] = useState<TicketFilter>("Open");
   const [showSourceEditor, setShowSourceEditor] = useState(false);
+  const [isAdminToolsOpen, setIsAdminToolsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!permissions.mayManageUsers && isAdminToolsOpen) {
+      setIsAdminToolsOpen(false);
+    }
+  }, [isAdminToolsOpen, permissions.mayManageUsers]);
 
   const documentFolders = buildSidebarFolders(data.documents);
   const currentTabTitle =
@@ -30,8 +38,13 @@ export function App() {
   };
 
   function handleNewDocument() {
+    setIsAdminToolsOpen(false);
     actions.createDocumentDraft();
     setShowSourceEditor(true);
+  }
+
+  function handleOpenAdminTools() {
+    setIsAdminToolsOpen(true);
   }
 
   return (
@@ -40,9 +53,11 @@ export function App() {
         activeRole={data.activeRole}
         demoUserState={state.demoUserState}
         roleSwitchStatus={state.roleSwitchStatus}
-        rolesState={state.rolesState}
         selectedWorkspace={data.selectedWorkspace}
-        onRoleChange={(roleName) => void actions.changeRole(roleName)}
+        onSignIn={(identifier, password) =>
+          actions.signIn(identifier, password)
+        }
+        onSignOut={() => void actions.signOut()}
       />
 
       <div className="workspace-layout">
@@ -65,26 +80,42 @@ export function App() {
           onWorkspaceSelect={actions.setSelectedWorkspaceId}
         />
 
-        <DocumentWorkspace
-          activeRole={data.activeRole}
-          currentTabTitle={currentTabTitle}
-          documentState={state.documentState}
-          draft={state.draft}
-          hasUnsavedChanges={state.hasUnsavedChanges}
-          markdownBlockRenderers={data.markdownBlockRenderers}
-          mayCreateDocument={permissions.mayCreateDocument}
-          mayEditDocument={permissions.mayEditDocument}
-          roleSwitchStatus={state.roleSwitchStatus}
-          saveState={state.saveState}
-          selectedDocument={data.selectedDocument}
-          selectedWorkspace={data.selectedWorkspace}
-          selectedWorkspaceId={state.selectedWorkspaceId}
-          showSourceEditor={showSourceEditor}
-          onDraftChange={actions.updateDraft}
-          onNewDocument={handleNewDocument}
-          onSaveDocument={() => void actions.saveDocument()}
-          onShowSourceEditorChange={setShowSourceEditor}
-        />
+        {isAdminToolsOpen ? (
+          <AdminToolsPanel
+            roles={data.roles}
+            selectedWorkspaceName={data.selectedWorkspace?.name ?? null}
+            userMutationStatus={state.userMutationStatus}
+            usersState={state.usersState}
+            onClose={() => setIsAdminToolsOpen(false)}
+            onUserCreate={actions.createUser}
+            onUserUpdate={actions.updateUser}
+            onUserDelete={actions.deleteUser}
+          />
+        ) : (
+          <DocumentWorkspace
+            activeRole={data.activeRole}
+            currentTabTitle={currentTabTitle}
+            documentState={state.documentState}
+            draft={state.draft}
+            hasUnsavedChanges={state.hasUnsavedChanges}
+            markdownBlockRenderers={data.markdownBlockRenderers}
+            mayCreateDocument={permissions.mayCreateDocument}
+            mayEditDocument={permissions.mayEditDocument}
+            roleSwitchStatus={state.roleSwitchStatus}
+            saveState={state.saveState}
+            selectedDocument={data.selectedDocument}
+            selectedWorkspace={data.selectedWorkspace}
+            selectedWorkspaceId={state.selectedWorkspaceId}
+            showSourceEditor={showSourceEditor}
+            usersState={state.usersState}
+            mayManageUsers={permissions.mayManageUsers}
+            onDraftChange={actions.updateDraft}
+            onNewDocument={handleNewDocument}
+            onOpenAdminTools={handleOpenAdminTools}
+            onSaveDocument={() => void actions.saveDocument()}
+            onShowSourceEditorChange={setShowSourceEditor}
+          />
+        )}
 
         <RightSidebar
           activePanelTab={activePanelTab}

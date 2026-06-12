@@ -48,6 +48,10 @@ export function canManageAddons(roleName: RoleName | null | undefined) {
   return isAdmin(roleName);
 }
 
+export function canManageUsers(roleName: RoleName | null | undefined) {
+  return isAdmin(roleName);
+}
+
 export function canCreateTicket(roleName: RoleName | null | undefined) {
   return isAdmin(roleName) || hasRole(roleName, "Editor");
 }
@@ -94,8 +98,10 @@ export type Document = {
 export type User = {
   id: string;
   name: string;
+  username: string;
   email: string;
   roleId: string;
+  avatarUrl: string | null;
 };
 
 export type Role = {
@@ -204,11 +210,50 @@ export type DemoUser = {
   role: Role;
 };
 
+export type GuestAuth = {
+  authType: "guest";
+  user: null;
+  role: null;
+};
+
+export type DemoAuth = DemoUser | GuestAuth;
+
 export type UsersResponse = ApiSuccessResponse<{
   users: User[];
 }>;
 
-export type DemoUserResponse = ApiSuccessResponse<DemoUser>;
+export type CreateUserRequest = {
+  name: string;
+  username: string;
+  email: string;
+  roleId: string;
+  password: string;
+  avatarUrl?: string | null;
+};
+
+export type UpdateUserRequest = {
+  name?: string;
+  username?: string;
+  email?: string;
+  roleId?: string;
+  password?: string;
+  avatarUrl?: string | null;
+};
+
+export type UserResponse = ApiSuccessResponse<{
+  user: User;
+}>;
+
+export type DeleteUserResponse = ApiSuccessResponse<{
+  deletedUserId: string;
+}>;
+
+export type DemoUserResponse = ApiSuccessResponse<DemoAuth>;
+
+export type SignInRequest = {
+  identifier: string;
+  password: string;
+};
 
 export type SwitchDemoUserRoleRequest = {
   roleName: RoleName;

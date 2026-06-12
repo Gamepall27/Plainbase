@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { MarkdownBlockRendererExtension } from "@plainbase/addon-sdk";
-import type { Document, RoleName, Workspace } from "@plainbase/shared";
+import type { Document, RoleName, User, Workspace } from "@plainbase/shared";
 import type { LoadState, SaveState } from "../../app/types";
 import { countWords } from "../../lib/document-draft";
 import { formatTimestamp } from "../../lib/formatters";
@@ -11,7 +11,10 @@ import {
   type DocumentEditorPaneHandle
 } from "../DocumentEditorPane";
 import { EditorFormattingToolbar } from "../EditorFormattingToolbar";
-import { MarkdownPreview } from "../MarkdownPreview";
+import {
+  PreviewEditor,
+  type PreviewEditorHandle
+} from "./PreviewEditor";
 
 type DocumentWorkspaceProps = {
   activeRole: RoleName | null;
@@ -22,14 +25,17 @@ type DocumentWorkspaceProps = {
   markdownBlockRenderers: MarkdownBlockRendererExtension<string>[];
   mayCreateDocument: boolean;
   mayEditDocument: boolean;
+  mayManageUsers: boolean;
   saveState: SaveState;
   selectedDocument: Document | null;
   selectedWorkspace: Workspace | null;
   selectedWorkspaceId: string | null;
   showSourceEditor: boolean;
   roleSwitchStatus: SaveState;
+  usersState: LoadState<User[]>;
   onDraftChange: (draft: EditorDraft) => void;
   onNewDocument: () => void;
+  onOpenAdminTools: () => void;
   onSaveDocument: () => void;
   onShowSourceEditorChange: (show: boolean) => void;
 };
@@ -43,25 +49,26 @@ export function DocumentWorkspace({
   markdownBlockRenderers,
   mayCreateDocument,
   mayEditDocument,
+  mayManageUsers,
   saveState,
   selectedDocument,
   selectedWorkspace,
   selectedWorkspaceId,
   showSourceEditor,
   roleSwitchStatus,
+  usersState,
   onDraftChange,
   onNewDocument,
+  onOpenAdminTools,
   onSaveDocument,
   onShowSourceEditorChange
 }: DocumentWorkspaceProps) {
+  const previewEditorRef = useRef<PreviewEditorHandle | null>(null);
   const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
   const wordCount = countWords(draft?.content ?? "");
 
   function applyFormatting(action: FormattingAction) {
-    onShowSourceEditorChange(true);
-    requestAnimationFrame(() => {
-      sourceEditorRef.current?.applyFormatting(action);
-    });
+    previewEditorRef.current?.applyFormatting(action);
   }
 
   return (
@@ -118,6 +125,20 @@ export function DocumentWorkspace({
               <h1 className="canvas-title">{currentTabTitle}</h1>
             </div>
             <div className="canvas-status-stack">
+              {mayManageUsers && (
+                <button
+                  type="button"
+                  className="workspace-admin-button"
+                  onClick={onOpenAdminTools}
+                >
+                  Admin-Tools
+                  {usersState.status === "success" && (
+                    <span className="workspace-admin-count">
+                      {usersState.data.length}
+                    </span>
+                  )}
+                </button>
+              )}
               <span className="role-pill">{activeRole ?? "Demo"}</span>
               {hasUnsavedChanges && (
                 <span className="unsaved-pill">Ungespeichert</span>
@@ -125,17 +146,36 @@ export function DocumentWorkspace({
             </div>
           </div>
 
+          {mayManageUsers && (
+            <div className="workspace-admin-hint">
+              <strong>Admin:</strong> Oeffne die Admin-Tools, um Nutzer anzulegen,
+              zu bearbeiten oder zu entfernen.
+            </div>
+          )}
+
           {selectedDocument?.slug === "welcome" && (
             <div className="document-callout">
               Plainbase ist deine zentrale Wissensbasis fuer das Team.
             </div>
           )}
 
-          <MarkdownPreview
+          <PreviewEditor
+            ref={previewEditorRef}
+            canEdit={mayEditDocument}
             content={draft?.content ?? ""}
             currentDocument={selectedDocument}
             markdownBlockRenderers={markdownBlockRenderers}
             workspaceId={selectedWorkspaceId}
+            onContentChange={(content) => {
+              if (!draft) {
+                return;
+              }
+
+              onDraftChange({
+                ...draft,
+                content
+              });
+            }}
           />
 
           <div className="document-tip">
@@ -158,7 +198,7 @@ export function DocumentWorkspace({
             </span>
           </div>
           <div className="document-meta-right">
-            <span>{activeRole ? `von ${activeRole}` : "Demo-User"}</span>
+            <span>{activeRole ? `von ${activeRole}` : "Nicht angemeldet"}</span>
             <span>Woerter: {wordCount}</span>
           </div>
         </div>

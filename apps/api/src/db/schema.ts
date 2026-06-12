@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { defaultDemoPassword, hashPassword } from "../auth/passwords.js";
 
 const schemaStatements = [
   `
@@ -20,7 +21,9 @@ const schemaStatements = [
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      username TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
       role_id TEXT NOT NULL,
       FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT
     )
@@ -102,4 +105,41 @@ export function applySchema(database: DatabaseSync) {
   for (const statement of schemaStatements) {
     database.exec(statement);
   }
+
+  ensureColumn(database, "users", "username", "TEXT");
+  ensureColumn(database, "users", "password_hash", "TEXT");
+  ensureColumn(database, "users", "avatar_url", "TEXT");
+  database.exec(`
+    UPDATE users
+    SET username = LOWER(SUBSTR(email, 1, INSTR(email, '@') - 1))
+    WHERE username IS NULL OR TRIM(username) = ''
+  `);
+  database.exec(`
+    UPDATE users
+    SET password_hash = '${hashPassword(defaultDemoPassword)}'
+    WHERE password_hash IS NULL OR TRIM(password_hash) = ''
+  `);
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx
+    ON users (username)
+  `);
+}
+
+function ensureColumn(
+  database: DatabaseSync,
+  tableName: string,
+  columnName: string,
+  columnDefinition: string
+) {
+  const columns = database
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{ name: string }>;
+
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+
+  database.exec(
+    `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`
+  );
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Document } from "@plainbase/shared";
 import type { DemoAuthContext } from "../auth/demo-auth-context.js";
+import { requireDemoUser } from "../auth/demo-auth-context.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { ApiError } from "../errors/api-error.js";
@@ -31,6 +32,7 @@ export class DocumentService {
   }
 
   createDocument(input: unknown, actor: DemoAuthContext) {
+    const demoUser = requireDemoUser(actor);
     const body = expectObject(input);
     const workspaceId = readRequiredString(body, "workspaceId");
     const title = readRequiredString(body, "title");
@@ -58,12 +60,13 @@ export class DocumentService {
       content,
       createdAt: timestamp,
       updatedAt: timestamp,
-      createdByUserId: actor.user.id,
-      updatedByUserId: actor.user.id
+      createdByUserId: demoUser.user.id,
+      updatedByUserId: demoUser.user.id
     });
   }
 
   updateDocument(documentId: string, input: unknown, actor: DemoAuthContext) {
+    const demoUser = requireDemoUser(actor);
     const document = this.requireDocument(documentId);
     const body = expectObject(input);
 
@@ -104,7 +107,7 @@ export class DocumentService {
       slug,
       content,
       updatedAt: new Date().toISOString(),
-      updatedByUserId: actor.user.id
+      updatedByUserId: demoUser.user.id
     };
 
     return this.documentRepository.update(updatedDocument);

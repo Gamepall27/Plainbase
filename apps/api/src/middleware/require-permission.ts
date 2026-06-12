@@ -9,7 +9,7 @@ export function requirePermission(
   message: string
 ) {
   return (request: Request, _response: Response, next: NextFunction) => {
-    if (!permissionCheck(request.auth.role.name)) {
+    if (!permissionCheck(request.auth.role?.name)) {
       next(new ApiError(403, "FORBIDDEN", message));
       return;
     }

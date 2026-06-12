@@ -17,7 +17,7 @@ const actions: Array<{
   { action: "codeblock", label: "</>", title: "Codeblock" }
 ];
 
-const staticActions = ["Link", "Bild", "..."];
+const staticActions = ["Link", "Bild"];
 
 export function EditorFormattingToolbar({
   disabled,
@@ -25,6 +25,7 @@ export function EditorFormattingToolbar({
 }: EditorFormattingToolbarProps) {
   return (
     <div className="editor-formatting-toolbar">
+      <span className="toolbar-mode-label">Preview bearbeiten</span>
       {actions.map((item) => (
         <button
           key={item.action}

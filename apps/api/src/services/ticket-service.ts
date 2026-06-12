@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Ticket } from "@plainbase/shared";
 import type { DemoAuthContext } from "../auth/demo-auth-context.js";
+import { requireDemoUser } from "../auth/demo-auth-context.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { TicketRepository } from "../db/repositories/ticket-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
@@ -32,6 +33,7 @@ export class TicketService {
   }
 
   createTicket(input: unknown, actor: DemoAuthContext) {
+    const demoUser = requireDemoUser(actor);
     const body = expectObject(input);
     const workspaceId = readRequiredString(body, "workspaceId");
     const title = readRequiredString(body, "title");
@@ -53,7 +55,7 @@ export class TicketService {
       title,
       description,
       status,
-      creatorId: actor.user.id,
+      creatorId: demoUser.user.id,
       assigneeId: assigneeId ?? null,
       createdAt: timestamp,
       updatedAt: timestamp

@@ -135,4 +135,18 @@ export class TicketRepository {
 
     return ticket;
   }
+
+  countByCreatorId(userId: string) {
+    const row = this.database
+      .prepare(
+        `
+          SELECT COUNT(*) AS total
+          FROM tickets
+          WHERE creator_id = ?
+        `
+      )
+      .get(userId) as { total: number };
+
+    return row.total;
+  }
 }

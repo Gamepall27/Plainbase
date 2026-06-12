@@ -170,4 +170,18 @@ export class DocumentRepository {
       )
       .run(id);
   }
+
+  countByAuthorUserId(userId: string) {
+    const row = this.database
+      .prepare(
+        `
+          SELECT COUNT(*) AS total
+          FROM documents
+          WHERE created_by_user_id = ? OR updated_by_user_id = ?
+        `
+      )
+      .get(userId, userId) as { total: number };
+
+    return row.total;
+  }
 }

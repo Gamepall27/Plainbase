@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import type {
   Addon,
-  DemoUser,
+  DemoAuth,
   Document,
   Role,
   RoleName,
   Ticket,
+  User,
   Workspace
 } from "@plainbase/shared";
 import {
   canCreateDocument,
   canCreateTicket,
   canEditDocument,
-  canManageAddons
+  canManageAddons,
+  canManageUsers
 } from "@plainbase/shared";
 import { AddonRegistry } from "../addons/addon-registry";
 import { apiClient } from "../api/client";
@@ -46,10 +48,13 @@ export function useWorkspaceApp() {
   >({
     status: "loading"
   });
-  const [demoUserState, setDemoUserState] = useState<LoadState<DemoUser>>({
+  const [demoUserState, setDemoUserState] = useState<LoadState<DemoAuth>>({
     status: "loading"
   });
   const [ticketsState, setTicketsState] = useState<LoadState<Ticket[]>>({
+    status: "loading"
+  });
+  const [usersState, setUsersState] = useState<LoadState<User[]>>({
     status: "loading"
   });
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
@@ -62,6 +67,9 @@ export function useWorkspaceApp() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [roleSwitchStatus, setRoleSwitchStatus] = useState<SaveState>({
+    status: "idle"
+  });
+  const [userMutationStatus, setUserMutationStatus] = useState<SaveState>({
     status: "idle"
   });
   const [pendingAddonId, setPendingAddonId] = useState<string | null>(null);
@@ -108,12 +116,19 @@ export function useWorkspaceApp() {
   }, [selectedDocumentId]);
 
   async function loadShellData() {
-    const [workspacesResult, addonsResult, rolesResult, demoUserResult] =
+    const [
+      workspacesResult,
+      addonsResult,
+      rolesResult,
+      demoUserResult,
+      usersResult
+    ] =
       await Promise.allSettled([
         apiClient.getWorkspaces(),
         apiClient.getAddons(),
         apiClient.getRoles(),
-        apiClient.getDemoUser()
+        apiClient.getDemoUser(),
+        apiClient.getUsers()
       ]);
 
     if (workspacesResult.status === "fulfilled") {
@@ -152,6 +167,15 @@ export function useWorkspaceApp() {
       setDemoUserState({
         status: "error",
         message: getErrorMessage(demoUserResult.reason)
+      });
+    }
+
+    if (usersResult.status === "fulfilled") {
+      setUsersState({ status: "success", data: usersResult.value });
+    } else {
+      setUsersState({
+        status: "error",
+        message: getErrorMessage(usersResult.reason)
       });
     }
   }
@@ -228,7 +252,54 @@ export function useWorkspaceApp() {
       setDemoUserState({ status: "success", data: demoUser });
       setRoleSwitchStatus({
         status: "success",
-        message: `Aktive Rolle ist jetzt ${demoUser.role.name}.`
+        message:
+          demoUser.authType === "demo"
+            ? `Aktive Rolle ist jetzt ${demoUser.role.name}.`
+            : "Demo-Session wurde aktualisiert."
+      });
+    } catch (error) {
+      setRoleSwitchStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+    }
+  }
+
+  async function signIn(identifier: string, password: string) {
+    setRoleSwitchStatus({ status: "saving" });
+
+    try {
+      const demoAuth = await apiClient.signInDemoUser({
+        identifier,
+        password
+      });
+      setDemoUserState({ status: "success", data: demoAuth });
+      setRoleSwitchStatus({
+        status: "success",
+        message:
+          demoAuth.authType === "demo"
+            ? `Angemeldet als ${demoAuth.user.name}.`
+            : "Anmeldung fehlgeschlagen."
+      });
+      return true;
+    } catch (error) {
+      setRoleSwitchStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function signOut() {
+    setRoleSwitchStatus({ status: "saving" });
+
+    try {
+      const demoAuth = await apiClient.signOutDemoUser();
+      setDemoUserState({ status: "success", data: demoAuth });
+      setRoleSwitchStatus({
+        status: "success",
+        message: "Demo-Session wurde beendet."
       });
     } catch (error) {
       setRoleSwitchStatus({
@@ -342,8 +413,128 @@ export function useWorkspaceApp() {
     }
   }
 
+  async function createUser(input: {
+    name: string;
+    username: string;
+    email: string;
+    roleId: string;
+    password: string;
+    avatarUrl: string | null;
+  }) {
+    setUserMutationStatus({ status: "saving" });
+
+    try {
+      const createdUser = await apiClient.createUser(input);
+
+      setUsersState((current) => {
+        if (current.status !== "success") {
+          return {
+            status: "success",
+            data: [createdUser]
+          };
+        }
+
+        return {
+          status: "success",
+          data: [...current.data, createdUser].sort((left, right) =>
+            left.name.localeCompare(right.name)
+          )
+        };
+      });
+
+      setUserMutationStatus({
+        status: "success",
+        message: `"${createdUser.name}" wurde angelegt.`
+      });
+      return true;
+    } catch (error) {
+      setUserMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function updateUser(
+    userId: string,
+    input: {
+      name?: string;
+      username?: string;
+      email?: string;
+      roleId?: string;
+      password?: string;
+      avatarUrl?: string | null;
+    }
+  ) {
+    setUserMutationStatus({ status: "saving" });
+
+    try {
+      const updatedUser = await apiClient.updateUser(userId, input);
+
+      setUsersState((current) => {
+        if (current.status !== "success") {
+          return {
+            status: "success",
+            data: [updatedUser]
+          };
+        }
+
+        return {
+          status: "success",
+          data: current.data
+            .map((user) => (user.id === updatedUser.id ? updatedUser : user))
+            .sort((left, right) => left.name.localeCompare(right.name))
+        };
+      });
+
+      setUserMutationStatus({
+        status: "success",
+        message: `"${updatedUser.name}" wurde aktualisiert.`
+      });
+      return true;
+    } catch (error) {
+      setUserMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function deleteUser(userId: string) {
+    setUserMutationStatus({ status: "saving" });
+
+    try {
+      const deletedUserId = await apiClient.deleteUser(userId);
+
+      setUsersState((current) => {
+        if (current.status !== "success") {
+          return current;
+        }
+
+        return {
+          status: "success",
+          data: current.data.filter((user) => user.id !== deletedUserId)
+        };
+      });
+
+      setUserMutationStatus({
+        status: "success",
+        message: "Nutzer wurde entfernt."
+      });
+      return true;
+    } catch (error) {
+      setUserMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
   const activeRole =
-    demoUserState.status === "success" ? demoUserState.data.role.name : null;
+    demoUserState.status === "success" ? demoUserState.data.role?.name ?? null : null;
   const workspaces =
     workspacesState.status === "success" ? workspacesState.data : [];
   const documents =
@@ -367,12 +558,14 @@ export function useWorkspaceApp() {
       addonRegistryState,
       demoUserState,
       ticketsState,
+      usersState,
       selectedWorkspaceId,
       selectedDocumentId,
       draft,
       hasUnsavedChanges,
       saveState,
       roleSwitchStatus,
+      userMutationStatus,
       pendingAddonId
     },
     data: {
@@ -380,7 +573,9 @@ export function useWorkspaceApp() {
       workspaces,
       documents,
       addons,
+      roles: rolesState.status === "success" ? rolesState.data : [],
       tickets,
+      users: usersState.status === "success" ? usersState.data : [],
       selectedWorkspace,
       selectedDocument,
       activeAddonIds: addonRegistry?.getActiveAddonIds() ?? [],
@@ -393,16 +588,22 @@ export function useWorkspaceApp() {
       mayCreateDocument: canCreateDocument(activeRole),
       mayEditDocument: canEditDocument(activeRole),
       mayManageAddons: canManageAddons(activeRole),
-      mayCreateTicket: canCreateTicket(activeRole)
+      mayCreateTicket: canCreateTicket(activeRole),
+      mayManageUsers: canManageUsers(activeRole)
     },
     actions: {
       setSelectedWorkspaceId,
       setSelectedDocumentId,
+      signIn,
       changeRole,
+      signOut,
       createDocumentDraft,
       saveDocument,
       updateDraft,
-      toggleAddon
+      toggleAddon,
+      createUser,
+      updateUser,
+      deleteUser
     }
   };
 }

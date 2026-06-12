@@ -3,14 +3,20 @@ import type {
   AddonResponse,
   AddonsResponse,
   ApiErrorResponse,
+  CreateUserRequest,
   CreateDocumentRequest,
-  DemoUser,
+  DeleteUserResponse,
   DemoUserResponse,
   DocumentResponse,
   DocumentsResponse,
   Role,
   RolesResponse,
+  SignInRequest,
   SwitchDemoUserRoleRequest,
+  UpdateUserRequest,
+  User,
+  UserResponse,
+  UsersResponse,
   TicketsResponse,
   UpdateDocumentRequest,
   WorkspacesResponse
@@ -74,14 +80,42 @@ export const apiClient = {
     }).then((response) => response.data.addon),
   getDemoUser: () =>
     request<DemoUserResponse>("/api/demo-user").then((response) => response.data),
+  signInDemoUser: (payload: SignInRequest) =>
+    request<DemoUserResponse>("/api/demo-user/sign-in", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data),
   switchDemoRole: (roleName: Role["name"]) =>
     request<DemoUserResponse>("/api/demo-user/switch-role", {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify({ roleName } satisfies SwitchDemoUserRoleRequest)
     }).then((response) => response.data),
+  signOutDemoUser: () =>
+    request<DemoUserResponse>("/api/demo-user/sign-out", {
+      method: "POST"
+    }).then((response) => response.data),
   getRoles: () =>
     request<RolesResponse>("/api/roles").then((response) => response.data.roles),
+  getUsers: () =>
+    request<UsersResponse>("/api/users").then((response) => response.data.users),
+  createUser: (payload: CreateUserRequest) =>
+    request<UserResponse>("/api/users", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data.user),
+  updateUser: (userId: string, payload: UpdateUserRequest) =>
+    request<UserResponse>(`/api/users/${userId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data.user),
+  deleteUser: (userId: string) =>
+    request<DeleteUserResponse>(`/api/users/${userId}`, {
+      method: "DELETE"
+    }).then((response) => response.data.deletedUserId),
   getTickets: (workspaceId: string) =>
     request<TicketsResponse>(`/api/workspaces/${workspaceId}/tickets`).then(
       (response) => response.data.tickets

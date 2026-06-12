@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { defaultDemoPassword, hashPassword } from "../auth/passwords.js";
 import type {
   Addon,
   Document,
@@ -28,20 +29,26 @@ const users: User[] = [
   {
     id: "user-admin",
     name: "Admin User",
+    username: "admin",
     email: "admin@demo-company.local",
-    roleId: "role-admin"
+    roleId: "role-admin",
+    avatarUrl: "https://i.pravatar.cc/96?u=user-admin"
   },
   {
     id: "user-editor",
     name: "Editor User",
+    username: "editor",
     email: "editor@demo-company.local",
-    roleId: "role-editor"
+    roleId: "role-editor",
+    avatarUrl: "https://i.pravatar.cc/96?u=user-editor"
   },
   {
     id: "user-viewer",
     name: "Viewer User",
+    username: "viewer",
     email: "viewer@demo-company.local",
-    roleId: "role-viewer"
+    roleId: "role-viewer",
+    avatarUrl: "https://i.pravatar.cc/96?u=user-viewer"
   }
 ];
 
@@ -223,7 +230,7 @@ const addons: Addon[] = [
 
 const appState = {
   key: "demo_user_id",
-  value: "user-admin"
+  value: "__guest__"
 };
 
 export function seedDatabase(database: DatabaseSync) {
@@ -243,12 +250,15 @@ export function seedDatabase(database: DatabaseSync) {
       name = excluded.name
   `);
   const insertUser = database.prepare(`
-    INSERT INTO users (id, name, email, role_id)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO users (id, name, username, email, password_hash, role_id, avatar_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
+      username = excluded.username,
       email = excluded.email,
-      role_id = excluded.role_id
+      password_hash = excluded.password_hash,
+      role_id = excluded.role_id,
+      avatar_url = excluded.avatar_url
   `);
   const insertDocument = database.prepare(`
     INSERT INTO documents (
@@ -288,8 +298,7 @@ export function seedDatabase(database: DatabaseSync) {
   const insertAppState = database.prepare(`
     INSERT INTO app_state (key, value)
     VALUES (?, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value
+    ON CONFLICT(key) DO NOTHING
   `);
   const insertTicket = database.prepare(`
     INSERT INTO tickets (
@@ -335,7 +344,15 @@ export function seedDatabase(database: DatabaseSync) {
     }
 
     for (const user of users) {
-      insertUser.run(user.id, user.name, user.email, user.roleId);
+      insertUser.run(
+        user.id,
+        user.name,
+        user.username,
+        user.email,
+        hashPassword(defaultDemoPassword),
+        user.roleId,
+        user.avatarUrl
+      );
     }
 
     for (const document of documents) {

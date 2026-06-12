@@ -31,7 +31,12 @@ export function createServices(database: PlainbaseDatabase) {
   return {
     workspaceService: new WorkspaceService(workspaceRepository),
     documentService: new DocumentService(documentRepository, workspaceRepository),
-    userService: new UserService(userRepository),
+    userService: new UserService(
+      userRepository,
+      roleRepository,
+      documentRepository,
+      ticketRepository
+    ),
     demoAuthService: new DemoAuthService(
       userRepository,
       roleRepository,
