@@ -1,15 +1,15 @@
 import type { NextFunction, Request, Response } from "express";
-import type { DemoAuthContext } from "../auth/demo-auth-context.js";
+import type { RoleName } from "@plainbase/shared";
 import { ApiError } from "../errors/api-error.js";
 
-type PermissionCheck = (user: DemoAuthContext) => boolean;
+type PermissionCheck = (roleName: RoleName | null | undefined) => boolean;
 
 export function requirePermission(
   permissionCheck: PermissionCheck,
   message: string
 ) {
   return (request: Request, _response: Response, next: NextFunction) => {
-    if (!permissionCheck(request.auth)) {
+    if (!permissionCheck(request.auth.role.name)) {
       next(new ApiError(403, "FORBIDDEN", message));
       return;
     }
