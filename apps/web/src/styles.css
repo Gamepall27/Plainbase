@@ -1,0 +1,144 @@
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: #14213d;
+  background:
+    radial-gradient(circle at top, rgba(245, 158, 11, 0.24), transparent 34%),
+    linear-gradient(180deg, #f6f1e8 0%, #f4f7fb 100%);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  gap: 2rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+
+.hero,
+.panel {
+  padding: 2rem;
+  border: 1px solid rgba(20, 33, 61, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 60px rgba(20, 33, 61, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+  color: #9a6700;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 1rem;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 0.95;
+}
+
+.lead {
+  max-width: 44rem;
+  font-size: 1.1rem;
+}
+
+.compact {
+  margin-bottom: 1.5rem;
+}
+
+.status-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+}
+
+.status-grid div {
+  padding: 1rem;
+  border-radius: 16px;
+  background: #fffaf1;
+}
+
+dt {
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c8698;
+}
+
+dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.entry-list li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.875rem 1rem;
+  border-radius: 14px;
+  background: #fffaf1;
+  overflow-wrap: anywhere;
+}
+
+.entry-kind {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c8698;
+}
+
+.compact-grid {
+  margin-bottom: 1.5rem;
+}
+
+.demo-columns {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 720px) {
+  .status-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .demo-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
