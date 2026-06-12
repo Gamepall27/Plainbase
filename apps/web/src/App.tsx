@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   Addon,
   DemoUser,
@@ -9,12 +9,15 @@ import type {
 } from "@plainbase/shared";
 import {
   canCreateDocument,
+  canCreateTicket,
   canEditDocument,
   canManageAddons
 } from "@plainbase/shared";
 import { AddonRegistry } from "./addons/addon-registry";
 import { apiClient, ApiClientError } from "./api/client";
 import { DocumentEditorPane } from "./components/DocumentEditorPane";
+import type { DocumentEditorPaneHandle } from "./components/DocumentEditorPane";
+import { EditorFormattingToolbar } from "./components/EditorFormattingToolbar";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import type { EditorDraft } from "./editor/types";
 
@@ -29,7 +32,65 @@ type SaveState =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
 
+type SidebarFolder = {
+  id: string;
+  title: string;
+  items: SidebarItem[];
+};
+
+type SidebarItem = {
+  id: string;
+  title: string;
+  slug?: string;
+  documentId?: string;
+  disabled?: boolean;
+  children?: SidebarItem[];
+};
+
+type RightPanelTab = "tickets" | "links" | "notes";
+type TicketFilter = Ticket["status"];
+
+const rightPanelTabs: Array<{
+  id: RightPanelTab;
+  label: string;
+}> = [
+  { id: "tickets", label: "Tickets" },
+  { id: "links", label: "Verknuepfungen" },
+  { id: "notes", label: "Notizen" }
+];
+
+const quickLinks = [
+  "Alle Dokumente",
+  "Favoriten",
+  "Kuerzlich geoeffnet"
+];
+
+const staticFolders: SidebarFolder[] = [
+  {
+    id: "handbook",
+    title: "Handbuch",
+    items: [
+      { id: "handbook-started", title: "Getting Started", disabled: true },
+      { id: "handbook-rules", title: "Richtlinien", disabled: true }
+    ]
+  },
+  {
+    id: "projects",
+    title: "Projekte",
+    items: [
+      { id: "project-relaunch", title: "Website Relaunch", disabled: true },
+      { id: "project-mobile", title: "Mobile App", disabled: true }
+    ]
+  },
+  {
+    id: "archive",
+    title: "Archiv",
+    items: [{ id: "archive-notes", title: "Alte Notizen", disabled: true }]
+  }
+];
+
 export function App() {
+  const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
   const [workspacesState, setWorkspacesState] = useState<LoadState<Workspace[]>>({
     status: "loading"
   });
@@ -69,6 +130,9 @@ export function App() {
     status: "idle"
   });
   const [pendingAddonId, setPendingAddonId] = useState<string | null>(null);
+  const [activePanelTab, setActivePanelTab] = useState<RightPanelTab>("tickets");
+  const [ticketFilter, setTicketFilter] = useState<TicketFilter>("Open");
+  const [showSourceEditor, setShowSourceEditor] = useState(false);
 
   useEffect(() => {
     void loadShellData();
@@ -174,7 +238,10 @@ export function App() {
       setDocumentsState({ status: "success", data: documents });
 
       setSelectedDocumentId((currentDocumentId) => {
-        if (currentDocumentId && documents.some((item) => item.id === currentDocumentId)) {
+        if (
+          currentDocumentId &&
+          documents.some((item) => item.id === currentDocumentId)
+        ) {
           return currentDocumentId;
         }
 
@@ -249,6 +316,7 @@ export function App() {
     setDraft(createEmptyDraft(selectedWorkspaceId));
     setHasUnsavedChanges(false);
     setSaveState({ status: "idle" });
+    setShowSourceEditor(true);
   }
 
   async function handleSaveDocument() {
@@ -344,12 +412,11 @@ export function App() {
   }
 
   const activeRole =
-    demoUserState.status === "success" ? demoUserState.data.role.name : undefined;
-  const demoUser =
-    demoUserState.status === "success" ? demoUserState.data : null;
-  const mayCreateDocument = canCreateDocument(demoUser);
-  const mayEditDocument = canEditDocument(demoUser);
-  const mayManageAddons = canManageAddons(demoUser);
+    demoUserState.status === "success" ? demoUserState.data.role.name : null;
+  const mayCreateDocument = canCreateDocument(activeRole);
+  const mayEditDocument = canEditDocument(activeRole);
+  const mayManageAddons = canManageAddons(activeRole);
+  const mayCreateTicket = canCreateTicket(activeRole);
   const workspaces =
     workspacesState.status === "success" ? workspacesState.data : [];
   const documents =
@@ -364,285 +431,723 @@ export function App() {
   const markdownBlockRenderers =
     addonRegistry?.getMarkdownBlockRenderers() ?? [];
   const addonWarnings = addonRegistry?.getWarnings() ?? [];
+  const selectedWorkspace =
+    workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null;
+  const selectedDocument =
+    documentState?.status === "success" ? documentState.data : null;
   const addonPanelContext = {
     activeAddonIds,
-    currentDocument:
-      documentState?.status === "success" ? documentState.data : null,
-    demoRoleName: activeRole ?? null,
+    currentDocument: selectedDocument,
+    demoRoleName: activeRole,
     tickets,
     workspaceId: selectedWorkspaceId
   };
+  const activeTickets = tickets.filter((ticket) => ticket.status === ticketFilter);
+  const selectedTicketCount = activeTickets.length;
+  const documentFolders = buildSidebarFolders(documents);
+  const linkedDocuments = documents
+    .filter((document) => document.id !== selectedDocumentId)
+    .slice(0, 3);
+  const currentTabTitle = draft?.title.trim() || selectedDocument?.title || "Welcome";
+  const wordCount = countWords(draft?.content ?? "");
 
   return (
-    <main className="workspace-app">
-      <aside className="left-sidebar">
-        <div className="sidebar-section">
-          <p className="section-label">Workspace</p>
-          {workspacesState.status === "loading" && <p>Lade Workspaces...</p>}
-          {workspacesState.status === "error" && (
-            <p className="feedback error">{workspacesState.message}</p>
-          )}
-          {workspacesState.status === "success" && (
-            <select
-              className="field"
-              value={selectedWorkspaceId ?? ""}
-              onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-            >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
+    <div className="workspace-frame">
+      <header className="app-topbar">
+        <div className="brand-lockup">
+          <div className="brand-badge">PB</div>
+          <span className="brand-name">Plainbase</span>
+        </div>
+
+        <div className="topbar-workspace-pill">
+          <span className="topbar-workspace-icon">[]</span>
+          <span>{selectedWorkspace?.name ?? "Workspace"}</span>
+        </div>
+
+        <div className="topbar-spacer" />
+
+        <div className="topbar-role">
+          <span>Rolle:</span>
+          <select
+            className="toolbar-select"
+            value={activeRole ?? ""}
+            disabled={
+              rolesState.status !== "success" || roleSwitchStatus.status === "saving"
+            }
+            onChange={(event) =>
+              void handleRoleChange(event.target.value as Role["name"])
+            }
+          >
+            {rolesState.status === "success" &&
+              rolesState.data.map((role) => (
+                <option key={role.id} value={role.name}>
+                  {role.name}
                 </option>
               ))}
-            </select>
-          )}
+          </select>
         </div>
 
-        <div className="sidebar-section">
-          <div className="section-heading-row">
-            <p className="section-label">Dokumente</p>
-            <span className="section-count">{documents.length}</span>
-          </div>
-          {documentsState.status === "loading" && <p>Lade Dokumente...</p>}
-          {documentsState.status === "error" && (
-            <p className="feedback error">{documentsState.message}</p>
-          )}
-          {documentsState.status === "success" && (
-            <ul className="sidebar-list">
-              {documents.map((document) => (
-                <li key={document.id}>
-                  <button
-                    className={
-                      document.id === selectedDocumentId
-                        ? "sidebar-item active"
-                        : "sidebar-item"
-                    }
-                    onClick={() => setSelectedDocumentId(document.id)}
-                  >
-                    <span className="sidebar-item-title">{document.title}</span>
-                    <span className="sidebar-item-meta">{document.slug}</span>
-                  </button>
-                </li>
+        <div className="topbar-avatar">
+          {demoUserState.status === "success"
+            ? getInitials(demoUserState.data.user.name)
+            : "PB"}
+        </div>
+
+        <div className="topbar-icon-row">
+          <button className="topbar-icon-button" type="button">
+            Theme
+          </button>
+          <button className="topbar-icon-button" type="button">
+            Alerts
+          </button>
+          <button className="topbar-icon-button" type="button">
+            Share
+          </button>
+        </div>
+      </header>
+
+      <div className="workspace-layout">
+        <aside className="left-sidebar">
+          <section className="left-panel-card">
+            <p className="rail-heading">Workspace</p>
+            {workspacesState.status === "loading" && <p>Lade Workspaces...</p>}
+            {workspacesState.status === "error" && (
+              <p className="feedback error">{workspacesState.message}</p>
+            )}
+            {workspacesState.status === "success" && (
+              <select
+                className="sidebar-select"
+                value={selectedWorkspaceId ?? ""}
+                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+              >
+                {workspaces.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </section>
+
+          <section className="left-panel-card">
+            <div className="left-nav-links">
+              {quickLinks.map((link) => (
+                <button key={link} type="button" className="left-nav-link">
+                  <span className="left-nav-link-icon">+</span>
+                  <span>{link}</span>
+                </button>
               ))}
-            </ul>
-          )}
-        </div>
+            </div>
+          </section>
 
-        <div className="sidebar-section">
-          <div className="section-heading-row">
-            <p className="section-label">Add-ons</p>
-            <span className="section-count">{addons.length}</span>
-          </div>
-          {addonsState.status === "loading" && <p>Lade Add-ons...</p>}
-          {addonsState.status === "error" && (
-            <p className="feedback error">{addonsState.message}</p>
-          )}
-          {addonsState.status === "success" && (
-            <ul className="sidebar-list">
-              {addons.map((addon) => (
-                <li key={addon.id} className="addon-list-item">
-                  <div>
-                    <span className="sidebar-item-title">{addon.name}</span>
-                    <span className="sidebar-item-meta">
-                      {addon.enabled ? "aktiv" : "deaktiviert"}
-                    </span>
-                  </div>
-                  {mayManageAddons && (
-                    <button
-                      className="ghost-button small"
-                      disabled={pendingAddonId === addon.id}
-                      onClick={() => void handleAddonToggle(addon.id)}
-                    >
-                      {pendingAddonId === addon.id
-                        ? "..."
-                        : addon.enabled
-                          ? "Aus"
-                          : "An"}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {leftSidebarPanels.map((panel) => (
-          <section key={panel.id} className="sidebar-section addon-panel">
+          <section className="left-panel-card">
             <div className="section-heading-row">
-              <div>
-                <h3>{panel.title}</h3>
+              <p className="rail-heading">Dokumente</p>
+              <button
+                type="button"
+                className="tree-action-button"
+                onClick={handleNewDocument}
+                disabled={!mayCreateDocument}
+              >
+                +
+              </button>
+            </div>
+
+            {documentsState.status === "loading" && <p>Lade Dokumente...</p>}
+            {documentsState.status === "error" && (
+              <p className="feedback error">{documentsState.message}</p>
+            )}
+            {documentsState.status === "success" && (
+              <div className="sidebar-tree">
+                {documentFolders.map((folder) => (
+                  <div key={folder.id} className="tree-folder">
+                    <div className="tree-folder-label">
+                      <span className="tree-chevron">v</span>
+                      <span>{folder.title}</span>
+                    </div>
+                    <div className="tree-folder-content">
+                      {folder.items.map((item) => (
+                        <SidebarTreeItem
+                          key={item.id}
+                          item={item}
+                          selectedDocumentId={selectedDocumentId}
+                          onSelect={setSelectedDocumentId}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {staticFolders.map((folder) => (
+                  <div key={folder.id} className="tree-folder">
+                    <div className="tree-folder-label">
+                      <span className="tree-chevron">v</span>
+                      <span>{folder.title}</span>
+                    </div>
+                    <div className="tree-folder-content">
+                      {folder.items.map((item) => (
+                        <SidebarTreeItem
+                          key={item.id}
+                          item={item}
+                          selectedDocumentId={selectedDocumentId}
+                          onSelect={setSelectedDocumentId}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="left-panel-card">
+            <p className="rail-heading">Add-ons</p>
+            {addons.map((addon) => (
+              <label key={addon.id} className="addon-check-row">
+                <span className="addon-check">
+                  <input
+                    type="checkbox"
+                    checked={addon.enabled}
+                    disabled={!mayManageAddons || pendingAddonId === addon.id}
+                    onChange={() => void handleAddonToggle(addon.id)}
+                  />
+                </span>
+                <span className="addon-check-label">{addon.name}</span>
+                {addon.name === "Tickets" && (
+                  <span className="addon-counter-badge">
+                    {tickets.filter((ticket) => ticket.status === "Open").length}
+                  </span>
+                )}
+              </label>
+            ))}
+
+            {leftSidebarPanels.map((panel) => (
+              <section key={panel.id} className="embedded-addon-panel">
+                <h4>{panel.title}</h4>
+                {panel.render(addonPanelContext)}
+              </section>
+            ))}
+          </section>
+
+          <button type="button" className="settings-button" disabled>
+            Einstellungen
+          </button>
+        </aside>
+
+        <section className="main-stage">
+          <div className="document-tabs">
+            <button type="button" className="document-tab active">
+              <span>{currentTabTitle}</span>
+              <span className="document-tab-close">x</span>
+            </button>
+            <button
+              type="button"
+              className="document-tab-add"
+              onClick={handleNewDocument}
+              disabled={!mayCreateDocument}
+            >
+              +
+            </button>
+          </div>
+
+          <div className="document-shell">
+            <div className="document-toolbar">
+              <div className="toolbar-left">
+                <button
+                  type="button"
+                  className="toolbar-round-button"
+                  disabled
+                >
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-round-button"
+                  disabled
+                >
+                  Redo
+                </button>
+              </div>
+
+              <EditorFormattingToolbar
+                disabled={!mayEditDocument}
+                onApply={(action) => {
+                  setShowSourceEditor(true);
+                  requestAnimationFrame(() => {
+                    sourceEditorRef.current?.applyFormatting(action);
+                  });
+                }}
+              />
+
+              <div className="toolbar-right">
+                <button
+                  type="button"
+                  className="toolbar-secondary-button"
+                  onClick={() => setShowSourceEditor((current) => !current)}
+                >
+                  {showSourceEditor ? "Preview" : "Markdown"}
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-primary-button"
+                  onClick={() => void handleSaveDocument()}
+                  disabled={
+                    !draft ||
+                    !mayEditDocument ||
+                    !hasUnsavedChanges ||
+                    saveState.status === "saving"
+                  }
+                >
+                  {saveState.status === "saving" ? "Speichert..." : "Speichern"}
+                </button>
               </div>
             </div>
-            {panel.render(addonPanelContext)}
-          </section>
-        ))}
-      </aside>
 
-      <section className="main-stage">
-        <header className="top-toolbar">
-          <div className="toolbar-actions">
-            <button
-              className="primary-button"
-              onClick={handleNewDocument}
-              disabled={!selectedWorkspaceId || !mayCreateDocument}
-            >
-              Neues Dokument
-            </button>
-            <button
-              className="secondary-button"
-              onClick={() => void handleSaveDocument()}
-              disabled={!draft || !mayEditDocument || !hasUnsavedChanges || saveState.status === "saving"}
-            >
-              {saveState.status === "saving" ? "Speichert..." : "Speichern"}
-            </button>
-          </div>
+            {(roleSwitchStatus.status !== "idle" || saveState.status !== "idle") && (
+              <div className="workspace-notices">
+                {roleSwitchStatus.status === "error" && (
+                  <p className="feedback error">{roleSwitchStatus.message}</p>
+                )}
+                {roleSwitchStatus.status === "success" && (
+                  <p className="feedback success">{roleSwitchStatus.message}</p>
+                )}
+                {saveState.status === "error" && (
+                  <p className="feedback error">{saveState.message}</p>
+                )}
+                {saveState.status === "success" && (
+                  <p className="feedback success">{saveState.message}</p>
+                )}
+              </div>
+            )}
 
-          <div className="toolbar-actions">
-            <div className="role-switcher">
-              <label htmlFor="role-select">Demo-Rolle</label>
-              <select
-                id="role-select"
-                className="field"
-                value={activeRole ?? ""}
-                disabled={rolesState.status !== "success" || roleSwitchStatus.status === "saving"}
-                onChange={(event) =>
-                  void handleRoleChange(event.target.value as Role["name"])
-                }
-              >
-                {rolesState.status === "success" &&
-                  rolesState.data.map((role) => (
-                    <option key={role.id} value={role.name}>
-                      {role.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <button className="ghost-button" disabled>
-              Einstellungen
-            </button>
-          </div>
-        </header>
-
-        <div className="toolbar-status-row">
-          <div>
-            <p className="eyebrow">Aktiver Demo-User</p>
-            {demoUserState.status === "loading" && <p>Lade Benutzer...</p>}
-            {demoUserState.status === "error" && (
-              <p className="feedback error">{demoUserState.message}</p>
+            {documentState?.status === "loading" && (
+              <div className="document-loading">Lade Dokument...</div>
             )}
-            {demoUserState.status === "success" && (
-              <p className="toolbar-status-text">
-                {demoUserState.data.user.name} ({demoUserState.data.role.name})
-              </p>
-            )}
-            {hasUnsavedChanges && (
-              <p className="unsaved-banner">
-                Dieses Dokument hat ungespeicherte Aenderungen.
-              </p>
-            )}
-          </div>
-          <div className="toolbar-feedback-group">
-            {roleSwitchStatus.status === "error" && (
-              <p className="feedback error">{roleSwitchStatus.message}</p>
-            )}
-            {roleSwitchStatus.status === "success" && (
-              <p className="feedback success">{roleSwitchStatus.message}</p>
-            )}
-            {saveState.status === "error" && (
-              <p className="feedback error">{saveState.message}</p>
-            )}
-            {saveState.status === "success" && (
-              <p className="feedback success">{saveState.message}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="editor-split">
-          <div>
-            {documentState?.status === "loading" && <p>Lade Dokument...</p>}
             {documentState?.status === "error" && (
               <p className="feedback error">{documentState.message}</p>
             )}
-            <DocumentEditorPane
-              canEdit={mayEditDocument}
-              draft={draft}
-              hasUnsavedChanges={hasUnsavedChanges}
-              isSaving={saveState.status === "saving"}
-              message={saveState.status === "success" ? saveState.message : null}
-              onDraftChange={handleDraftChange}
-            />
-          </div>
 
-          <section className="preview-pane">
-            <div className="pane-header">
-              <div>
-                <p className="section-label">Markdown-Vorschau</p>
-                <h2>Live Preview</h2>
-              </div>
-            </div>
-
-            <MarkdownPreview
-              content={draft?.content ?? ""}
-              currentDocument={
-                documentState?.status === "success" ? documentState.data : null
-              }
-              markdownBlockRenderers={markdownBlockRenderers}
-              workspaceId={selectedWorkspaceId}
-            />
-          </section>
-        </div>
-      </section>
-
-      <aside className="right-sidebar">
-        <div className="sidebar-section">
-          <p className="section-label">Add-on-Panels</p>
-          <p className="sidebar-copy">
-            Platz fuer kontextuelle Panels aus aktivierten Add-ons.
-          </p>
-          {addonRegistryState.status === "error" && (
-            <p className="feedback error">{addonRegistryState.message}</p>
-          )}
-          {addonWarnings.map((warning) => (
-            <p key={warning} className="feedback error">
-              {warning}
-            </p>
-          ))}
-        </div>
-
-        {addonsState.status === "success" &&
-          addons.map((addon) => (
-            <section key={addon.id} className="addon-panel">
-              <div className="section-heading-row">
+            <section className="document-canvas">
+              <div className="document-preview-header">
                 <div>
-                  <h3>{addon.name}</h3>
-                  <p className="panel-subtitle">Version {addon.version}</p>
+                  <p className="canvas-eyebrow">
+                    {selectedWorkspace?.name ?? "Workspace"}
+                  </p>
+                  <h1 className="canvas-title">{currentTabTitle}</h1>
                 </div>
-                <span className={addon.enabled ? "status-pill on" : "status-pill off"}>
-                  {addon.enabled ? "aktiv" : "aus"}
-                </span>
+                <div className="canvas-status-stack">
+                  <span className="role-pill">{activeRole ?? "Demo"}</span>
+                  {hasUnsavedChanges && (
+                    <span className="unsaved-pill">Ungespeichert</span>
+                  )}
+                </div>
               </div>
 
-              <p className="sidebar-copy">{addon.description}</p>
-              <div className="addon-placeholder">
-                {addon.enabled
-                  ? "Aktiviertes Add-on. Panels und Renderer werden ueber die Registry eingebunden."
-                  : "Add-on ist deaktiviert und liefert aktuell keine Erweiterungen."}
+              {selectedDocument?.slug === "welcome" && (
+                <div className="document-callout">
+                  Plainbase ist deine zentrale Wissensbasis fuer das Team.
+                </div>
+              )}
+
+              <MarkdownPreview
+                content={draft?.content ?? ""}
+                currentDocument={selectedDocument}
+                markdownBlockRenderers={markdownBlockRenderers}
+                workspaceId={selectedWorkspaceId}
+              />
+
+              <div className="document-tip">
+                <strong>Tipp:</strong> Nutze die Add-ons in der rechten Seitenleiste,
+                um Tickets, Diagramme und mehr zu verwalten.
               </div>
             </section>
-          ))}
 
-        {rightSidebarPanels.map((panel) => (
-          <section key={panel.id} className="addon-panel">
-            <div className="section-heading-row">
-              <div>
-                <h3>{panel.title}</h3>
+            <div className="document-meta-bar">
+              <div className="document-meta-left">
+                <button
+                  type="button"
+                  className="meta-toggle"
+                  onClick={() => setShowSourceEditor((current) => !current)}
+                >
+                  {showSourceEditor ? "Source ausblenden" : "Markdown anzeigen"}
+                </button>
+                <span>Zuletzt geaendert: {formatTimestamp(selectedDocument?.updatedAt)}</span>
+              </div>
+              <div className="document-meta-right">
+                <span>{activeRole ? `von ${activeRole}` : "Demo-User"}</span>
+                <span>Woerter: {wordCount}</span>
               </div>
             </div>
-            {panel.render(addonPanelContext)}
-          </section>
-        ))}
-      </aside>
-    </main>
+
+            {showSourceEditor && (
+              <div className="source-editor-shell">
+                <DocumentEditorPane
+                  ref={sourceEditorRef}
+                  canEdit={mayEditDocument}
+                  draft={draft}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  isSaving={saveState.status === "saving"}
+                  message={
+                    saveState.status === "success" ? saveState.message : null
+                  }
+                  onDraftChange={handleDraftChange}
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        <aside className="right-sidebar">
+          <div className="context-tabs">
+            {rightPanelTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={
+                  tab.id === activePanelTab ? "context-tab active" : "context-tab"
+                }
+                onClick={() => setActivePanelTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+                {tab.id === "tickets" && (
+                  <span className="tab-count">
+                    {tickets.filter((ticket) => ticket.status === "Open").length}
+                  </span>
+                )}
+              </button>
+            ))}
+            <button type="button" className="context-close-button">
+              x
+            </button>
+          </div>
+
+          {activePanelTab === "tickets" && (
+            <div className="right-panel-section">
+              <div className="ticket-filter-row">
+                {(["Open", "In Progress", "Done"] as TicketFilter[]).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    className={
+                      status === ticketFilter
+                        ? "ticket-filter-chip active"
+                        : "ticket-filter-chip"
+                    }
+                    onClick={() => setTicketFilter(status)}
+                  >
+                    {formatTicketFilterLabel(status)} {countTicketsByStatus(tickets, status)}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="new-ticket-button"
+                disabled={!mayCreateTicket}
+              >
+                + Neues Ticket
+              </button>
+
+              <div className="ticket-card-list">
+                {activeTickets.length === 0 && (
+                  <div className="empty-ticket-state">
+                    Keine Tickets fuer diesen Status vorhanden.
+                  </div>
+                )}
+                {activeTickets.map((ticket, index) => (
+                  <article key={ticket.id} className="ticket-card">
+                    <div className="ticket-card-head">
+                      <h3>{ticket.title}</h3>
+                      <span className={getTicketStatusClassName(ticket.status)}>
+                        {formatTicketFilterLabel(ticket.status)}
+                      </span>
+                    </div>
+                    <p className="ticket-code">#T-{1001 + index}</p>
+                    <dl className="ticket-meta-list">
+                      <div>
+                        <dt>Dokument:</dt>
+                        <dd>{getTicketDocumentTitle(ticket, documents)}</dd>
+                      </div>
+                      <div>
+                        <dt>Beschreibung:</dt>
+                        <dd>{ticket.description}</dd>
+                      </div>
+                    </dl>
+                    <div className="ticket-card-footer">
+                      <span>{formatTimestamp(ticket.updatedAt)}</span>
+                      <span className={getPriorityClassName(index)}>
+                        {getPriorityLabel(index)}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <button type="button" className="inline-link-button">
+                Alle Tickets anzeigen
+              </button>
+            </div>
+          )}
+
+          {activePanelTab === "links" && (
+            <div className="right-panel-section">
+              <div className="link-card">
+                <h3>Verknuepfungen</h3>
+                <div className="link-list">
+                  {linkedDocuments.map((document) => (
+                    <button
+                      key={document.id}
+                      type="button"
+                      className="linked-document-row"
+                      onClick={() => setSelectedDocumentId(document.id)}
+                    >
+                      <span>{document.title}</span>
+                      <span>oeffnen</span>
+                    </button>
+                  ))}
+                  {linkedDocuments.length === 0 && (
+                    <p className="sidebar-copy">Noch keine Verknuepfungen verfuegbar.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activePanelTab === "notes" && (
+            <div className="right-panel-section">
+              {addonRegistryState.status === "error" && (
+                <p className="feedback error">{addonRegistryState.message}</p>
+              )}
+              {addonWarnings.map((warning) => (
+                <p key={warning} className="feedback error">
+                  {warning}
+                </p>
+              ))}
+
+              {rightSidebarPanels.map((panel) => (
+                <section key={panel.id} className="addon-panel-card">
+                  <h3>{panel.title}</h3>
+                  {panel.render(addonPanelContext)}
+                </section>
+              ))}
+
+              {rightSidebarPanels.length === 0 && (
+                <div className="empty-ticket-state">
+                  Keine Add-on-Panels aktiv.
+                </div>
+              )}
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <section className="feature-strip">
+        <article className="feature-card">
+          <div className="feature-icon">[]</div>
+          <div>
+            <h3>Navigation</h3>
+            <p>Workspaces, Dokumente, Favoriten, Add-ons und Einstellungen.</p>
+          </div>
+        </article>
+        <article className="feature-card">
+          <div className="feature-icon">/</div>
+          <div>
+            <h3>Bearbeitung im Preview-Modus</h3>
+            <p>Direkt im fertigen Layout arbeiten und die Markdown-Quelle nur bei Bedarf einblenden.</p>
+          </div>
+        </article>
+        <article className="feature-card">
+          <div className="feature-icon">+</div>
+          <div>
+            <h3>Add-on Panels</h3>
+            <p>Erweiterungen wie Tickets, Diagramme und eigene Tools direkt integriert.</p>
+          </div>
+        </article>
+      </section>
+    </div>
   );
+}
+
+type SidebarTreeItemProps = {
+  item: SidebarItem;
+  selectedDocumentId: string | null;
+  onSelect: (documentId: string) => void;
+};
+
+function SidebarTreeItem({
+  item,
+  selectedDocumentId,
+  onSelect
+}: SidebarTreeItemProps) {
+  const isSelected = item.documentId === selectedDocumentId;
+  const className = isSelected ? "tree-document-item active" : "tree-document-item";
+
+  return (
+    <div className="tree-item">
+      {item.documentId ? (
+        <button
+          type="button"
+          className={className}
+          onClick={() => onSelect(item.documentId!)}
+        >
+          <span className="tree-document-icon">[]</span>
+          <span>{item.title}</span>
+        </button>
+      ) : (
+        <div className="tree-document-item placeholder">
+          <span className="tree-document-icon">[]</span>
+          <span>{item.title}</span>
+        </div>
+      )}
+
+      {item.children && item.children.length > 0 && (
+        <div className="tree-item-children">
+          {item.children.map((child) => (
+            <SidebarTreeItem
+              key={child.id}
+              item={child}
+              selectedDocumentId={selectedDocumentId}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function buildSidebarFolders(documents: Document[]): SidebarFolder[] {
+  const documentMap = new Map<string, SidebarItem>();
+
+  for (const document of documents) {
+    documentMap.set(document.id, {
+      id: document.id,
+      title: document.title,
+      slug: document.slug,
+      documentId: document.id,
+      children: []
+    });
+  }
+
+  const topLevelItems: SidebarItem[] = [];
+
+  for (const document of documents) {
+    const item = documentMap.get(document.id);
+
+    if (!item) {
+      continue;
+    }
+
+    if (document.parentId) {
+      const parent = documentMap.get(document.parentId);
+
+      if (parent) {
+        parent.children = [...(parent.children ?? []), item];
+        continue;
+      }
+    }
+
+    topLevelItems.push(item);
+  }
+
+  return [
+    {
+      id: "workspace-documents",
+      title: "Willkommen",
+      items: topLevelItems
+    }
+  ];
+}
+
+function countTicketsByStatus(tickets: Ticket[], status: TicketFilter) {
+  return tickets.filter((ticket) => ticket.status === status).length;
+}
+
+function getTicketDocumentTitle(ticket: Ticket, documents: Document[]) {
+  if (!ticket.documentId) {
+    return "Kein Dokument";
+  }
+
+  return (
+    documents.find((document) => document.id === ticket.documentId)?.title ??
+    "Nicht verknuepft"
+  );
+}
+
+function formatTicketFilterLabel(status: TicketFilter) {
+  if (status === "Open") {
+    return "Offen";
+  }
+
+  if (status === "In Progress") {
+    return "In Progress";
+  }
+
+  return "Erledigt";
+}
+
+function getTicketStatusClassName(status: Ticket["status"]) {
+  if (status === "Open") {
+    return "ticket-badge open";
+  }
+
+  if (status === "In Progress") {
+    return "ticket-badge progress";
+  }
+
+  return "ticket-badge done";
+}
+
+function getPriorityClassName(index: number) {
+  if (index === 0) {
+    return "ticket-priority high";
+  }
+
+  if (index === 1) {
+    return "ticket-priority medium";
+  }
+
+  return "ticket-priority low";
+}
+
+function getPriorityLabel(index: number) {
+  if (index === 0) {
+    return "Hoch";
+  }
+
+  if (index === 1) {
+    return "Mittel";
+  }
+
+  return "Normal";
+}
+
+function countWords(value: string) {
+  const matches = value.trim().match(/\S+/g);
+  return matches?.length ?? 0;
+}
+
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return "unbekannt";
+  }
+
+  const date = new Date(value);
+
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function createEmptyDraft(workspaceId: string): EditorDraft {

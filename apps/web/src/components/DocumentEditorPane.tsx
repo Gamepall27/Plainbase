@@ -1,10 +1,9 @@
-import { useRef } from "react";
+import { forwardRef, useImperativeHandle, useRef } from "react";
 import type { EditorDraft } from "../editor/types";
 import {
   applyFormatting,
   type FormattingAction
 } from "../editor/markdown-format";
-import { EditorFormattingToolbar } from "./EditorFormattingToolbar";
 
 type DocumentEditorPaneProps = {
   canEdit: boolean;
@@ -15,18 +14,28 @@ type DocumentEditorPaneProps = {
   onDraftChange: (draft: EditorDraft) => void;
 };
 
-export function DocumentEditorPane({
-  canEdit,
-  draft,
-  hasUnsavedChanges,
-  isSaving,
-  message,
-  onDraftChange
-}: DocumentEditorPaneProps) {
+export type DocumentEditorPaneHandle = {
+  applyFormatting: (action: FormattingAction) => void;
+};
+
+export const DocumentEditorPane = forwardRef<
+  DocumentEditorPaneHandle,
+  DocumentEditorPaneProps
+>(function DocumentEditorPane(
+  {
+    canEdit,
+    draft,
+    hasUnsavedChanges,
+    isSaving,
+    message,
+    onDraftChange
+  },
+  ref
+) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   function handleApplyFormatting(action: FormattingAction) {
-    if (!draft || !textareaRef.current) {
+    if (!draft || !textareaRef.current || !canEdit) {
       return;
     }
 
@@ -49,27 +58,31 @@ export function DocumentEditorPane({
     });
   }
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      applyFormatting: handleApplyFormatting
+    }),
+    [canEdit, draft]
+  );
+
   return (
-    <section className="editor-pane">
-      <div className="pane-header">
+    <section className="source-editor-card">
+      <div className="source-editor-header">
         <div>
-          <p className="section-label">Markdown-Editor</p>
-          <h2>{draft?.isNew ? "Neues Dokument" : draft?.title || "Dokument"}</h2>
+          <p className="section-label">Markdown-Quelle</p>
+          <h3>Source Editor</h3>
         </div>
-        <div className="editor-status-stack">
-          {hasUnsavedChanges && (
-            <p className="unsaved-indicator">Ungespeicherte Aenderungen</p>
-          )}
-          {isSaving && <p className="editor-meta-text">Speichere Dokument...</p>}
-          {message && !hasUnsavedChanges && (
-            <p className="editor-meta-text">{message}</p>
-          )}
+        <div className="source-editor-status">
+          {hasUnsavedChanges && <span>Ungespeichert</span>}
+          {isSaving && <span>Speichere...</span>}
+          {message && !hasUnsavedChanges && <span>{message}</span>}
         </div>
       </div>
 
       {draft ? (
         <>
-          <div className="document-fields">
+          <div className="source-editor-fields">
             <label className="field-group">
               <span>Titel</span>
               <input
@@ -103,14 +116,9 @@ export function DocumentEditorPane({
             </label>
           </div>
 
-          <EditorFormattingToolbar
-            disabled={!canEdit}
-            onApply={handleApplyFormatting}
-          />
-
           <textarea
             ref={textareaRef}
-            className="editor-textarea"
+            className="source-editor-textarea"
             value={draft.content}
             disabled={!canEdit}
             onChange={(event) =>
@@ -123,19 +131,16 @@ export function DocumentEditorPane({
 
           {!canEdit && (
             <p className="hint-text">
-              Die aktive Rolle darf den Editor nur lesen.
+              Die aktive Rolle darf die Quelle nur lesen.
             </p>
           )}
         </>
       ) : (
         <div className="empty-state">
           <h3>Kein Dokument ausgewaehlt</h3>
-          <p>
-            Waehle links ein Dokument aus oder lege ein neues Dokument im
-            aktiven Workspace an.
-          </p>
+          <p>Lege ein neues Dokument an oder waehle links eines aus.</p>
         </div>
       )}
     </section>
   );
-}
+});

@@ -8,13 +8,16 @@ type EditorFormattingToolbarProps = {
 const actions: Array<{
   action: FormattingAction;
   label: string;
+  title: string;
 }> = [
-  { action: "heading", label: "Ueberschrift" },
-  { action: "bold", label: "Fett" },
-  { action: "italic", label: "Kursiv" },
-  { action: "list", label: "Liste" },
-  { action: "codeblock", label: "Codeblock" }
+  { action: "heading", label: "H1", title: "Ueberschrift" },
+  { action: "bold", label: "B", title: "Fett" },
+  { action: "italic", label: "I", title: "Kursiv" },
+  { action: "list", label: "List", title: "Liste" },
+  { action: "codeblock", label: "</>", title: "Codeblock" }
 ];
+
+const staticActions = ["Link", "Bild", "..."];
 
 export function EditorFormattingToolbar({
   disabled,
@@ -26,11 +29,26 @@ export function EditorFormattingToolbar({
         <button
           key={item.action}
           type="button"
-          className="ghost-button small"
+          className="format-icon-button"
           disabled={disabled}
           onClick={() => onApply(item.action)}
+          title={item.title}
         >
           {item.label}
+        </button>
+      ))}
+
+      <span className="toolbar-divider" />
+
+      {staticActions.map((label) => (
+        <button
+          key={label}
+          type="button"
+          className="format-icon-button muted"
+          disabled
+          title={label}
+        >
+          {label}
         </button>
       ))}
     </div>
