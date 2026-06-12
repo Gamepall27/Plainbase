@@ -109,6 +109,7 @@ export type DemoDataResponse = {
 export type ApiErrorCode =
   | "BAD_REQUEST"
   | "CONFLICT"
+  | "FORBIDDEN"
   | "INTERNAL_SERVER_ERROR"
   | "NOT_FOUND"
   | "VALIDATION_ERROR";
@@ -148,8 +149,6 @@ export type CreateDocumentRequest = {
   title: string;
   slug: string;
   content: string;
-  createdByUserId: string;
-  updatedByUserId?: string;
 };
 
 export type UpdateDocumentRequest = {
@@ -157,7 +156,6 @@ export type UpdateDocumentRequest = {
   title?: string;
   slug?: string;
   content?: string;
-  updatedByUserId: string;
 };
 
 export type DocumentsResponse = ApiSuccessResponse<{
@@ -173,6 +171,7 @@ export type DeleteDocumentResponse = ApiSuccessResponse<{
 }>;
 
 export type DemoUser = {
+  authType: "demo";
   user: User;
   role: Role;
 };
@@ -205,7 +204,6 @@ export type CreateTicketRequest = {
   title: string;
   description: string;
   status?: TicketStatus;
-  creatorId: string;
   assigneeId?: string | null;
 };
 

@@ -7,6 +7,7 @@ import { UserRepository } from "../db/repositories/user-repository.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { PlainbaseDatabase } from "../db/plainbase-database.js";
 import { AddonService } from "./addon-service.js";
+import { DemoAuthService } from "./demo-auth-service.js";
 import { DemoDataService } from "./demo-data-service.js";
 import { DocumentService } from "./document-service.js";
 import { RoleService } from "./role-service.js";
@@ -29,12 +30,9 @@ export function createServices(database: PlainbaseDatabase) {
 
   return {
     workspaceService: new WorkspaceService(workspaceRepository),
-    documentService: new DocumentService(
-      documentRepository,
-      workspaceRepository,
-      userRepository
-    ),
-    userService: new UserService(
+    documentService: new DocumentService(documentRepository, workspaceRepository),
+    userService: new UserService(userRepository),
+    demoAuthService: new DemoAuthService(
       userRepository,
       roleRepository,
       appStateRepository

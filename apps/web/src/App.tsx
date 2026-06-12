@@ -1,290 +1,690 @@
 import { useEffect, useState } from "react";
 import type {
-  DemoDataResponse,
-  HealthResponse,
-  LibrarySummaryResponse
+  Addon,
+  DemoUser,
+  Document,
+  Role,
+  Ticket,
+  Workspace
 } from "@plainbase/shared";
+import { AddonRegistry } from "./addons/addon-registry";
+import { apiClient, ApiClientError } from "./api/client";
+import { DocumentEditorPane } from "./components/DocumentEditorPane";
+import { MarkdownPreview } from "./components/MarkdownPreview";
+import type { EditorDraft } from "./editor/types";
+import {
+  canCreateDocument,
+  canEditDocument,
+  canManageAddons
+} from "./lib/permissions";
 
-type HealthState =
+type LoadState<T> =
   | { status: "loading" }
-  | { status: "success"; data: HealthResponse }
+  | { status: "success"; data: T }
   | { status: "error"; message: string };
 
-type LibraryState =
-  | { status: "loading" }
-  | { status: "success"; data: LibrarySummaryResponse }
-  | { status: "error"; message: string };
-
-type DemoDataState =
-  | { status: "loading" }
-  | { status: "success"; data: DemoDataResponse }
-  | { status: "unavailable"; message: string }
+type SaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  | { status: "success"; message: string }
   | { status: "error"; message: string };
 
 export function App() {
-  const [health, setHealth] = useState<HealthState>({ status: "loading" });
-  const [library, setLibrary] = useState<LibraryState>({ status: "loading" });
-  const [demoData, setDemoData] = useState<DemoDataState>({ status: "loading" });
+  const [workspacesState, setWorkspacesState] = useState<LoadState<Workspace[]>>({
+    status: "loading"
+  });
+  const [documentsState, setDocumentsState] = useState<LoadState<Document[]>>({
+    status: "loading"
+  });
+  const [documentState, setDocumentState] = useState<LoadState<Document> | null>(
+    null
+  );
+  const [addonsState, setAddonsState] = useState<LoadState<Addon[]>>({
+    status: "loading"
+  });
+  const [rolesState, setRolesState] = useState<LoadState<Role[]>>({
+    status: "loading"
+  });
+  const [addonRegistryState, setAddonRegistryState] = useState<
+    LoadState<AddonRegistry>
+  >({
+    status: "loading"
+  });
+  const [demoUserState, setDemoUserState] = useState<LoadState<DemoUser>>({
+    status: "loading"
+  });
+  const [ticketsState, setTicketsState] = useState<LoadState<Ticket[]>>({
+    status: "loading"
+  });
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
+    null
+  );
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
+    null
+  );
+  const [draft, setDraft] = useState<EditorDraft | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
+  const [roleSwitchStatus, setRoleSwitchStatus] = useState<SaveState>({
+    status: "idle"
+  });
+  const [pendingAddonId, setPendingAddonId] = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadHealth() {
-      try {
-        const response = await fetch("/api/health", {
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          throw new Error(`Health check failed with status ${response.status}`);
-        }
-
-        const data = (await response.json()) as HealthResponse;
-        setHealth({ status: "success", data });
-
-        if (!data.database) {
-          setDemoData({
-            status: "unavailable",
-            message:
-              "Die verbundene API liefert noch keine SQLite-Informationen."
-          });
-          return;
-        }
-
-        void loadDemoData();
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        setHealth({ status: "error", message });
-        setDemoData({ status: "error", message });
-      }
-    }
-
-    async function loadLibrary() {
-      try {
-        const response = await fetch("/api/library/summary", {
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          throw new Error(`Library request failed with status ${response.status}`);
-        }
-
-        const data = (await response.json()) as LibrarySummaryResponse;
-        setLibrary({ status: "success", data });
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        setLibrary({ status: "error", message });
-      }
-    }
-
-    void loadLibrary();
-
-    async function loadDemoData() {
-      try {
-        const response = await fetch("/api/demo-data", {
-          signal: controller.signal
-        });
-
-        if (response.status === 404) {
-          setDemoData({
-            status: "unavailable",
-            message:
-              "Die verbundene API kennt den Endpunkt /api/demo-data noch nicht."
-          });
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error(`Demo data request failed with status ${response.status}`);
-        }
-
-        const data = (await response.json()) as DemoDataResponse;
-        setDemoData({ status: "success", data });
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : "Unknown error";
-        setDemoData({ status: "error", message });
-      }
-    }
-
-    void loadHealth();
-
-    return () => controller.abort();
+    void loadShellData();
   }, []);
 
-  const database = health.status === "success" ? health.data.database : undefined;
+  useEffect(() => {
+    if (addonsState.status !== "success") {
+      return;
+    }
+
+    try {
+      setAddonRegistryState({
+        status: "success",
+        data: AddonRegistry.fromAddons(addonsState.data)
+      });
+    } catch (error) {
+      setAddonRegistryState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+    }
+  }, [addonsState]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      setDocumentsState({ status: "error", message: "Kein Workspace gewaehlt." });
+      setTicketsState({ status: "error", message: "Kein Workspace gewaehlt." });
+      return;
+    }
+
+    void loadWorkspaceData(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedDocumentId) {
+      setDocumentState(null);
+      return;
+    }
+
+    void loadDocument(selectedDocumentId);
+  }, [selectedDocumentId]);
+
+  async function loadShellData() {
+    const [workspacesResult, addonsResult, rolesResult, demoUserResult] =
+      await Promise.allSettled([
+        apiClient.getWorkspaces(),
+        apiClient.getAddons(),
+        apiClient.getRoles(),
+        apiClient.getDemoUser()
+      ]);
+
+    if (workspacesResult.status === "fulfilled") {
+      setWorkspacesState({ status: "success", data: workspacesResult.value });
+
+      const firstWorkspaceId = workspacesResult.value[0]?.id ?? null;
+      setSelectedWorkspaceId((current) => current ?? firstWorkspaceId);
+    } else {
+      setWorkspacesState({
+        status: "error",
+        message: getErrorMessage(workspacesResult.reason)
+      });
+    }
+
+    if (addonsResult.status === "fulfilled") {
+      setAddonsState({ status: "success", data: addonsResult.value });
+    } else {
+      setAddonsState({
+        status: "error",
+        message: getErrorMessage(addonsResult.reason)
+      });
+    }
+
+    if (rolesResult.status === "fulfilled") {
+      setRolesState({ status: "success", data: rolesResult.value });
+    } else {
+      setRolesState({
+        status: "error",
+        message: getErrorMessage(rolesResult.reason)
+      });
+    }
+
+    if (demoUserResult.status === "fulfilled") {
+      setDemoUserState({ status: "success", data: demoUserResult.value });
+    } else {
+      setDemoUserState({
+        status: "error",
+        message: getErrorMessage(demoUserResult.reason)
+      });
+    }
+  }
+
+  async function loadWorkspaceData(workspaceId: string) {
+    setDocumentsState({ status: "loading" });
+    setTicketsState({ status: "loading" });
+
+    const [documentsResult, ticketsResult] = await Promise.allSettled([
+      apiClient.getDocuments(workspaceId),
+      apiClient.getTickets(workspaceId)
+    ]);
+
+    if (documentsResult.status === "fulfilled") {
+      const documents = documentsResult.value;
+      setDocumentsState({ status: "success", data: documents });
+
+      setSelectedDocumentId((currentDocumentId) => {
+        if (currentDocumentId && documents.some((item) => item.id === currentDocumentId)) {
+          return currentDocumentId;
+        }
+
+        const nextDocumentId = documents[0]?.id ?? null;
+
+        if (!nextDocumentId) {
+          setDraft(createEmptyDraft(workspaceId));
+          setHasUnsavedChanges(false);
+        }
+
+        return nextDocumentId;
+      });
+    } else {
+      setDocumentsState({
+        status: "error",
+        message: getErrorMessage(documentsResult.reason)
+      });
+    }
+
+    if (ticketsResult.status === "fulfilled") {
+      setTicketsState({ status: "success", data: ticketsResult.value });
+    } else {
+      setTicketsState({
+        status: "error",
+        message: getErrorMessage(ticketsResult.reason)
+      });
+    }
+  }
+
+  async function loadDocument(documentId: string) {
+    setDocumentState({ status: "loading" });
+
+    try {
+      const document = await apiClient.getDocument(documentId);
+      setDocumentState({ status: "success", data: document });
+      setDraft(mapDocumentToDraft(document));
+      setHasUnsavedChanges(false);
+      setSaveState({ status: "idle" });
+    } catch (error) {
+      setDocumentState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+    }
+  }
+
+  async function handleRoleChange(roleName: Role["name"]) {
+    setRoleSwitchStatus({ status: "saving" });
+
+    try {
+      const demoUser = await apiClient.switchDemoRole(roleName);
+      setDemoUserState({ status: "success", data: demoUser });
+      setRoleSwitchStatus({
+        status: "success",
+        message: `Aktive Rolle ist jetzt ${demoUser.role.name}.`
+      });
+    } catch (error) {
+      setRoleSwitchStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+    }
+  }
+
+  function handleNewDocument() {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    setSelectedDocumentId(null);
+    setDocumentState(null);
+    setDraft(createEmptyDraft(selectedWorkspaceId));
+    setHasUnsavedChanges(false);
+    setSaveState({ status: "idle" });
+  }
+
+  async function handleSaveDocument() {
+    if (!draft || !selectedWorkspaceId) {
+      return;
+    }
+
+    setSaveState({ status: "saving" });
+
+    try {
+      const title = draft.title.trim() || "Untitled document";
+      const slug = draft.slug.trim() || slugify(title);
+
+      const savedDocument = draft.isNew
+        ? await apiClient.createDocument({
+            workspaceId: selectedWorkspaceId,
+            parentId: draft.parentId,
+            title,
+            slug,
+            content: draft.content
+          })
+        : await apiClient.updateDocument(draft.id!, {
+            parentId: draft.parentId,
+            title,
+            slug,
+            content: draft.content
+          });
+
+      setDraft(mapDocumentToDraft(savedDocument));
+      setSelectedDocumentId(savedDocument.id);
+      setHasUnsavedChanges(false);
+      setSaveState({
+        status: "success",
+        message: `"${savedDocument.title}" wurde gespeichert.`
+      });
+
+      await loadWorkspaceData(selectedWorkspaceId);
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+    }
+  }
+
+  function handleDraftChange(nextDraft: EditorDraft) {
+    setDraft((current) => {
+      if (!current) {
+        return nextDraft;
+      }
+
+      const shouldUpdateSlug =
+        current.slug === "" || current.slug === slugify(current.title);
+
+      return {
+        ...nextDraft,
+        slug:
+          nextDraft.slug === current.slug && shouldUpdateSlug
+            ? slugify(nextDraft.title)
+            : slugify(nextDraft.slug)
+      };
+    });
+    setHasUnsavedChanges(true);
+    setSaveState({ status: "idle" });
+  }
+
+  async function handleAddonToggle(addonId: string) {
+    setPendingAddonId(addonId);
+
+    try {
+      const updatedAddon = await apiClient.toggleAddon(addonId);
+
+      setAddonsState((current) => {
+        if (current.status !== "success") {
+          return current;
+        }
+
+        return {
+          status: "success",
+          data: current.data.map((addon) =>
+            addon.id === updatedAddon.id ? updatedAddon : addon
+          )
+        };
+      });
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+    } finally {
+      setPendingAddonId(null);
+    }
+  }
+
+  const activeRole =
+    demoUserState.status === "success" ? demoUserState.data.role.name : undefined;
+  const demoUser =
+    demoUserState.status === "success" ? demoUserState.data : null;
+  const mayCreateDocument = canCreateDocument(demoUser);
+  const mayEditDocument = canEditDocument(demoUser);
+  const mayManageAddons = canManageAddons(demoUser);
+  const workspaces =
+    workspacesState.status === "success" ? workspacesState.data : [];
+  const documents =
+    documentsState.status === "success" ? documentsState.data : [];
+  const addons = addonsState.status === "success" ? addonsState.data : [];
+  const tickets = ticketsState.status === "success" ? ticketsState.data : [];
+  const addonRegistry =
+    addonRegistryState.status === "success" ? addonRegistryState.data : null;
+  const activeAddonIds = addonRegistry?.getActiveAddonIds() ?? [];
+  const leftSidebarPanels = addonRegistry?.getSidebarPanels("left") ?? [];
+  const rightSidebarPanels = addonRegistry?.getSidebarPanels("right") ?? [];
+  const markdownBlockRenderers =
+    addonRegistry?.getMarkdownBlockRenderers() ?? [];
+  const addonWarnings = addonRegistry?.getWarnings() ?? [];
+  const addonPanelContext = {
+    activeAddonIds,
+    currentDocument:
+      documentState?.status === "success" ? documentState.data : null,
+    demoRoleName: activeRole ?? null,
+    tickets,
+    workspaceId: selectedWorkspaceId
+  };
 
   return (
-    <main className="app-shell">
-      <section className="hero">
-        <p className="eyebrow">Markdown Knowledge Base</p>
-        <h1>Plainbase</h1>
-        <p className="lead">
-          Erweiterbares Grundgeruest fuer eine browserbasierte Wissensdatenbank
-          fuer Unternehmen.
-        </p>
-      </section>
+    <main className="workspace-app">
+      <aside className="left-sidebar">
+        <div className="sidebar-section">
+          <p className="section-label">Workspace</p>
+          {workspacesState.status === "loading" && <p>Lade Workspaces...</p>}
+          {workspacesState.status === "error" && (
+            <p className="feedback error">{workspacesState.message}</p>
+          )}
+          {workspacesState.status === "success" && (
+            <select
+              className="field"
+              value={selectedWorkspaceId ?? ""}
+              onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
 
-      <section className="panel">
-        <h2>Systemstatus</h2>
-        {health.status === "loading" && <p>API-Healthcheck wird geladen...</p>}
-        {health.status === "error" && (
-          <p>Backend nicht erreichbar: {health.message}</p>
-        )}
-        {health.status === "success" && (
-          <dl className="status-grid">
-            <div>
-              <dt>Status</dt>
-              <dd>{health.data.status}</dd>
-            </div>
-            <div>
-              <dt>Service</dt>
-              <dd>{health.data.service}</dd>
-            </div>
-            <div>
-              <dt>Zeit</dt>
-              <dd>{new Date(health.data.timestamp).toLocaleString("de-DE")}</dd>
-            </div>
-            <div>
-              <dt>Datenquelle</dt>
-              <dd>{health.data.storage.rootPath}</dd>
-            </div>
-            <div>
-              <dt>SQLite-Datei</dt>
-              <dd>{database?.path ?? "nicht verfuegbar"}</dd>
-            </div>
-            <div>
-              <dt>Markdown-Dateien</dt>
-              <dd>{health.data.storage.markdownFileCount}</dd>
-            </div>
-            <div>
-              <dt>Ordner</dt>
-              <dd>{health.data.storage.directoryCount}</dd>
-            </div>
-            <div>
-              <dt>Scan</dt>
-              <dd>{health.data.storage.scanCompleted ? "vollstaendig" : "teilweise"}</dd>
-            </div>
-            <div>
-              <dt>Workspace</dt>
-              <dd>{database?.workspaceCount ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Dokumente</dt>
-              <dd>{database?.documentCount ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Tickets</dt>
-              <dd>{database?.ticketCount ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Benutzer</dt>
-              <dd>{database?.userCount ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Rollen</dt>
-              <dd>{database?.roleCount ?? "n/a"}</dd>
-            </div>
-            <div>
-              <dt>Add-ons</dt>
-              <dd>{database?.addonCount ?? "n/a"}</dd>
-            </div>
-          </dl>
-        )}
-      </section>
+        <div className="sidebar-section">
+          <div className="section-heading-row">
+            <p className="section-label">Dokumente</p>
+            <span className="section-count">{documents.length}</span>
+          </div>
+          {documentsState.status === "loading" && <p>Lade Dokumente...</p>}
+          {documentsState.status === "error" && (
+            <p className="feedback error">{documentsState.message}</p>
+          )}
+          {documentsState.status === "success" && (
+            <ul className="sidebar-list">
+              {documents.map((document) => (
+                <li key={document.id}>
+                  <button
+                    className={
+                      document.id === selectedDocumentId
+                        ? "sidebar-item active"
+                        : "sidebar-item"
+                    }
+                    onClick={() => setSelectedDocumentId(document.id)}
+                  >
+                    <span className="sidebar-item-title">{document.title}</span>
+                    <span className="sidebar-item-meta">{document.slug}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <section className="panel">
-        <h2>Obsidian-Bibliothek</h2>
-        <p className="lead compact">
-          Der SMB-Ordner und seine Unterordner werden als dateibasierte
-          Wissensdatenbank verwendet.
-        </p>
-        {library.status === "loading" && <p>Ordnerinhalt wird geladen...</p>}
-        {library.status === "error" && (
-          <p>Bibliothek nicht lesbar: {library.message}</p>
-        )}
-        {library.status === "success" && (
-          <ul className="entry-list">
-            {library.data.topLevelEntries.map((entry) => (
-              <li key={entry.path}>
-                <span className="entry-kind">{entry.kind}</span>
-                <span>{entry.path}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <div className="sidebar-section">
+          <div className="section-heading-row">
+            <p className="section-label">Add-ons</p>
+            <span className="section-count">{addons.length}</span>
+          </div>
+          {addonsState.status === "loading" && <p>Lade Add-ons...</p>}
+          {addonsState.status === "error" && (
+            <p className="feedback error">{addonsState.message}</p>
+          )}
+          {addonsState.status === "success" && (
+            <ul className="sidebar-list">
+              {addons.map((addon) => (
+                <li key={addon.id} className="addon-list-item">
+                  <div>
+                    <span className="sidebar-item-title">{addon.name}</span>
+                    <span className="sidebar-item-meta">
+                      {addon.enabled ? "aktiv" : "deaktiviert"}
+                    </span>
+                  </div>
+                  {mayManageAddons && (
+                    <button
+                      className="ghost-button small"
+                      disabled={pendingAddonId === addon.id}
+                      onClick={() => void handleAddonToggle(addon.id)}
+                    >
+                      {pendingAddonId === addon.id
+                        ? "..."
+                        : addon.enabled
+                          ? "Aus"
+                          : "An"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <section className="panel">
-        <h2>SQLite Seed-Daten</h2>
-        <p className="lead compact">
-          Die Demo-Daten liegen in einer getrennten SQLite-Schicht und werden
-          ueber die API read-only ausgeliefert.
-        </p>
-        {demoData.status === "loading" && <p>Seed-Daten werden geladen...</p>}
-        {demoData.status === "unavailable" && <p>{demoData.message}</p>}
-        {demoData.status === "error" && (
-          <p>Seed-Daten nicht lesbar: {demoData.message}</p>
-        )}
-        {demoData.status === "success" && (
-          <>
-            <dl className="status-grid compact-grid">
+        {leftSidebarPanels.map((panel) => (
+          <section key={panel.id} className="sidebar-section addon-panel">
+            <div className="section-heading-row">
               <div>
-                <dt>Workspace</dt>
-                <dd>{demoData.data.workspaces[0]?.name ?? "n/a"}</dd>
+                <h3>{panel.title}</h3>
               </div>
-              <div>
-                <dt>Dokumente</dt>
-                <dd>{demoData.data.documents.length}</dd>
-              </div>
-              <div>
-                <dt>Tickets</dt>
-                <dd>{demoData.data.tickets.length}</dd>
-              </div>
-            </dl>
+            </div>
+            {panel.render(addonPanelContext)}
+          </section>
+        ))}
+      </aside>
 
-            <div className="demo-columns">
-              <div>
-                <h3>Dokumente</h3>
-                <ul className="entry-list">
-                  {demoData.data.documents.map((document) => (
-                    <li key={document.id}>
-                      <span className="entry-kind">document</span>
-                      <span>{document.title}</span>
-                    </li>
+      <section className="main-stage">
+        <header className="top-toolbar">
+          <div className="toolbar-actions">
+            <button
+              className="primary-button"
+              onClick={handleNewDocument}
+              disabled={!selectedWorkspaceId || !mayCreateDocument}
+            >
+              Neues Dokument
+            </button>
+            <button
+              className="secondary-button"
+              onClick={() => void handleSaveDocument()}
+              disabled={!draft || !mayEditDocument || !hasUnsavedChanges || saveState.status === "saving"}
+            >
+              {saveState.status === "saving" ? "Speichert..." : "Speichern"}
+            </button>
+          </div>
+
+          <div className="toolbar-actions">
+            <div className="role-switcher">
+              <label htmlFor="role-select">Demo-Rolle</label>
+              <select
+                id="role-select"
+                className="field"
+                value={activeRole ?? ""}
+                disabled={rolesState.status !== "success" || roleSwitchStatus.status === "saving"}
+                onChange={(event) =>
+                  void handleRoleChange(event.target.value as Role["name"])
+                }
+              >
+                {rolesState.status === "success" &&
+                  rolesState.data.map((role) => (
+                    <option key={role.id} value={role.name}>
+                      {role.name}
+                    </option>
                   ))}
-                </ul>
-              </div>
+              </select>
+            </div>
+            <button className="ghost-button" disabled>
+              Einstellungen
+            </button>
+          </div>
+        </header>
 
+        <div className="toolbar-status-row">
+          <div>
+            <p className="eyebrow">Aktiver Demo-User</p>
+            {demoUserState.status === "loading" && <p>Lade Benutzer...</p>}
+            {demoUserState.status === "error" && (
+              <p className="feedback error">{demoUserState.message}</p>
+            )}
+            {demoUserState.status === "success" && (
+              <p className="toolbar-status-text">
+                {demoUserState.data.user.name} ({demoUserState.data.role.name})
+              </p>
+            )}
+            {hasUnsavedChanges && (
+              <p className="unsaved-banner">
+                Dieses Dokument hat ungespeicherte Aenderungen.
+              </p>
+            )}
+          </div>
+          <div className="toolbar-feedback-group">
+            {roleSwitchStatus.status === "error" && (
+              <p className="feedback error">{roleSwitchStatus.message}</p>
+            )}
+            {roleSwitchStatus.status === "success" && (
+              <p className="feedback success">{roleSwitchStatus.message}</p>
+            )}
+            {saveState.status === "error" && (
+              <p className="feedback error">{saveState.message}</p>
+            )}
+            {saveState.status === "success" && (
+              <p className="feedback success">{saveState.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="editor-split">
+          <div>
+            {documentState?.status === "loading" && <p>Lade Dokument...</p>}
+            {documentState?.status === "error" && (
+              <p className="feedback error">{documentState.message}</p>
+            )}
+            <DocumentEditorPane
+              canEdit={mayEditDocument}
+              draft={draft}
+              hasUnsavedChanges={hasUnsavedChanges}
+              isSaving={saveState.status === "saving"}
+              message={saveState.status === "success" ? saveState.message : null}
+              onDraftChange={handleDraftChange}
+            />
+          </div>
+
+          <section className="preview-pane">
+            <div className="pane-header">
               <div>
-                <h3>Tickets</h3>
-                <ul className="entry-list">
-                  {demoData.data.tickets.map((ticket) => (
-                    <li key={ticket.id}>
-                      <span className="entry-kind">{ticket.status}</span>
-                      <span>{ticket.title}</span>
-                    </li>
-                  ))}
-                </ul>
+                <p className="section-label">Markdown-Vorschau</p>
+                <h2>Live Preview</h2>
               </div>
             </div>
-          </>
-        )}
+
+            <MarkdownPreview
+              content={draft?.content ?? ""}
+              currentDocument={
+                documentState?.status === "success" ? documentState.data : null
+              }
+              markdownBlockRenderers={markdownBlockRenderers}
+              workspaceId={selectedWorkspaceId}
+            />
+          </section>
+        </div>
       </section>
+
+      <aside className="right-sidebar">
+        <div className="sidebar-section">
+          <p className="section-label">Add-on-Panels</p>
+          <p className="sidebar-copy">
+            Platz fuer kontextuelle Panels aus aktivierten Add-ons.
+          </p>
+          {addonRegistryState.status === "error" && (
+            <p className="feedback error">{addonRegistryState.message}</p>
+          )}
+          {addonWarnings.map((warning) => (
+            <p key={warning} className="feedback error">
+              {warning}
+            </p>
+          ))}
+        </div>
+
+        {addonsState.status === "success" &&
+          addons.map((addon) => (
+            <section key={addon.id} className="addon-panel">
+              <div className="section-heading-row">
+                <div>
+                  <h3>{addon.name}</h3>
+                  <p className="panel-subtitle">Version {addon.version}</p>
+                </div>
+                <span className={addon.enabled ? "status-pill on" : "status-pill off"}>
+                  {addon.enabled ? "aktiv" : "aus"}
+                </span>
+              </div>
+
+              <p className="sidebar-copy">{addon.description}</p>
+              <div className="addon-placeholder">
+                {addon.enabled
+                  ? "Aktiviertes Add-on. Panels und Renderer werden ueber die Registry eingebunden."
+                  : "Add-on ist deaktiviert und liefert aktuell keine Erweiterungen."}
+              </div>
+            </section>
+          ))}
+
+        {rightSidebarPanels.map((panel) => (
+          <section key={panel.id} className="addon-panel">
+            <div className="section-heading-row">
+              <div>
+                <h3>{panel.title}</h3>
+              </div>
+            </div>
+            {panel.render(addonPanelContext)}
+          </section>
+        ))}
+      </aside>
     </main>
   );
+}
+
+function createEmptyDraft(workspaceId: string): EditorDraft {
+  return {
+    id: null,
+    workspaceId,
+    parentId: null,
+    title: "",
+    slug: "",
+    content: "# Neues Dokument\n",
+    isNew: true
+  };
+}
+
+function mapDocumentToDraft(document: Document): EditorDraft {
+  return {
+    id: document.id,
+    workspaceId: document.workspaceId,
+    parentId: document.parentId,
+    title: document.title,
+    slug: document.slug,
+    content: document.content,
+    isNew: false
+  };
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof ApiClientError) {
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unbekannter Fehler.";
 }

@@ -8,6 +8,10 @@ export class AddonService {
     return this.addonRepository.list();
   }
 
+  listEnabledAddons() {
+    return this.addonRepository.listEnabled();
+  }
+
   toggleAddon(addonId: string) {
     const addon = this.addonRepository.findById(addonId);
 

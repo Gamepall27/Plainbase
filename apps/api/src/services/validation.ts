@@ -164,6 +164,19 @@ export function requireAtLeastOneField(
   }
 }
 
+export function readRouteParam(
+  input: Record<string, string | string[] | undefined>,
+  field: string
+) {
+  const value = input[field];
+
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ApiError(400, "BAD_REQUEST", `Route parameter ${field} is required.`);
+  }
+
+  return value;
+}
+
 function readRequiredEnum<T extends string>(
   input: Record<string, unknown>,
   field: string,

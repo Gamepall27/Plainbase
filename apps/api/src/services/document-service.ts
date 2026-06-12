@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Document } from "@plainbase/shared";
+import type { DemoAuthContext } from "../auth/demo-auth-context.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
-import { UserRepository } from "../db/repositories/user-repository.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { ApiError } from "../errors/api-error.js";
 import {
@@ -18,8 +18,7 @@ import {
 export class DocumentService {
   constructor(
     private readonly documentRepository: DocumentRepository,
-    private readonly workspaceRepository: WorkspaceRepository,
-    private readonly userRepository: UserRepository
+    private readonly workspaceRepository: WorkspaceRepository
   ) {}
 
   listDocumentsByWorkspace(workspaceId: string) {
@@ -31,22 +30,17 @@ export class DocumentService {
     return this.requireDocument(documentId);
   }
 
-  createDocument(input: unknown) {
+  createDocument(input: unknown, actor: DemoAuthContext) {
     const body = expectObject(input);
     const workspaceId = readRequiredString(body, "workspaceId");
     const title = readRequiredString(body, "title");
     const slug = readRequiredString(body, "slug");
     const content = readRequiredText(body, "content");
-    const createdByUserId = readRequiredString(body, "createdByUserId");
-    const updatedByUserId =
-      readOptionalString(body, "updatedByUserId") ?? createdByUserId;
     const parentId = readOptionalNullableString(body, "parentId");
 
     validateSlug(slug);
 
     this.ensureWorkspaceExists(workspaceId);
-    this.ensureUserExists(createdByUserId, "createdByUserId");
-    this.ensureUserExists(updatedByUserId, "updatedByUserId");
     this.ensureUniqueSlug(workspaceId, slug);
 
     if (parentId) {
@@ -64,29 +58,27 @@ export class DocumentService {
       content,
       createdAt: timestamp,
       updatedAt: timestamp,
-      createdByUserId,
-      updatedByUserId
+      createdByUserId: actor.user.id,
+      updatedByUserId: actor.user.id
     });
   }
 
-  updateDocument(documentId: string, input: unknown) {
+  updateDocument(documentId: string, input: unknown, actor: DemoAuthContext) {
     const document = this.requireDocument(documentId);
     const body = expectObject(input);
 
     requireAtLeastOneField(
       body,
-      ["parentId", "title", "slug", "content", "updatedByUserId"],
+      ["parentId", "title", "slug", "content"],
       "At least one document field must be provided."
     );
 
-    const updatedByUserId = readRequiredString(body, "updatedByUserId");
     const title = readOptionalString(body, "title") ?? document.title;
     const slug = readOptionalString(body, "slug") ?? document.slug;
     const content = readOptionalText(body, "content") ?? document.content;
     const parentIdInput = readOptionalNullableString(body, "parentId");
 
     validateSlug(slug);
-    this.ensureUserExists(updatedByUserId, "updatedByUserId");
 
     if (slug !== document.slug) {
       this.ensureUniqueSlug(document.workspaceId, slug, document.id);
@@ -112,7 +104,7 @@ export class DocumentService {
       slug,
       content,
       updatedAt: new Date().toISOString(),
-      updatedByUserId
+      updatedByUserId: actor.user.id
     };
 
     return this.documentRepository.update(updatedDocument);
@@ -141,14 +133,6 @@ export class DocumentService {
   private ensureWorkspaceExists(workspaceId: string) {
     if (!this.workspaceRepository.findById(workspaceId)) {
       throw new ApiError(404, "NOT_FOUND", "Workspace not found.");
-    }
-  }
-
-  private ensureUserExists(userId: string, field: string) {
-    if (!this.userRepository.findById(userId)) {
-      throw new ApiError(404, "NOT_FOUND", "User not found.", {
-        [field]: `User ${userId} does not exist.`
-      });
     }
   }
 

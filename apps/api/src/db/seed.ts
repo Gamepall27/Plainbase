@@ -79,6 +79,12 @@ const documents: Document[] = [
       "- API: Express + SQLite",
       "- Frontend: React + Vite",
       "",
+      "## Diagram Example",
+      "```diagram",
+      "API -> Registry",
+      "Registry -> Addon",
+      "```",
+      "",
       "## Open Questions",
       "- How should add-ons be versioned?",
       "- Which documents should become templates?"
@@ -148,8 +154,26 @@ const addons: Addon[] = [
     manifestJson: JSON.stringify(
       {
         name: "Tickets",
-        entry: "/addons/tickets/index.js",
-        capabilities: ["tickets", "document-links"]
+        id: "addon-tickets",
+        version: "1.0.0",
+        description: "Adds issue tracking views and ticket-aware document links.",
+        entry: "tickets",
+        capabilities: ["tickets", "document-links", "sidebar"],
+        extensions: [
+          {
+            type: "sidebar-panel",
+            id: "tickets.sidebar.summary",
+            title: "Tickets Uebersicht",
+            location: "right"
+          },
+          {
+            type: "backend-route",
+            id: "tickets.backend.routes",
+            title: "Tickets Backend Routes",
+            path: "/addons/tickets",
+            method: "GET"
+          }
+        ]
       },
       null,
       2
@@ -158,14 +182,38 @@ const addons: Addon[] = [
   {
     id: "addon-diagrams",
     name: "Diagrams",
-    version: "1.2.0",
-    description: "Enables embedded architecture and flow diagrams in documents.",
+    version: "1.3.0",
+    description: "Renders simple custom diagram blocks inside markdown documents.",
     enabled: true,
     manifestJson: JSON.stringify(
       {
         name: "Diagrams",
-        entry: "/addons/diagrams/index.js",
-        capabilities: ["mermaid", "architecture"]
+        id: "addon-diagrams",
+        version: "1.3.0",
+        description: "Renders simple custom diagram blocks inside markdown documents.",
+        entry: "diagrams",
+        capabilities: ["diagram", "diagrams", "markdown"],
+        extensions: [
+          {
+            type: "sidebar-panel",
+            id: "diagrams.sidebar.help",
+            title: "Diagrams Hilfe",
+            location: "right"
+          },
+          {
+            type: "markdown-block-renderer",
+            id: "diagrams.renderer.diagram",
+            title: "Diagram Block Renderer",
+            language: "diagram"
+          },
+          {
+            type: "backend-route",
+            id: "diagrams.backend.routes",
+            title: "Diagrams Backend Routes",
+            path: "/addons/diagrams",
+            method: "GET"
+          }
+        ]
       },
       null,
       2

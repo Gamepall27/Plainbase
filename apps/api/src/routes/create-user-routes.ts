@@ -3,9 +3,13 @@ import type {
   UsersResponse
 } from "@plainbase/shared";
 import { Router } from "express";
+import { DemoAuthService } from "../services/demo-auth-service.js";
 import { UserService } from "../services/user-service.js";
 
-export function createUserRoutes(userService: UserService) {
+export function createUserRoutes(
+  userService: UserService,
+  demoAuthService: DemoAuthService
+) {
   const router = Router();
 
   router.get("/users", (_request, response) => {
@@ -22,7 +26,7 @@ export function createUserRoutes(userService: UserService) {
   router.get("/demo-user", (_request, response) => {
     const payload: DemoUserResponse = {
       success: true,
-      data: userService.getDemoUser()
+      data: demoAuthService.getActiveDemoAuth()
     };
 
     response.json(payload);
@@ -31,7 +35,7 @@ export function createUserRoutes(userService: UserService) {
   router.post("/demo-user/switch-role", (request, response) => {
     const payload: DemoUserResponse = {
       success: true,
-      data: userService.switchDemoUserRole(request.body)
+      data: demoAuthService.switchDemoUserRole(request.body)
     };
 
     response.json(payload);

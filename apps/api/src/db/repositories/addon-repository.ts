@@ -28,6 +28,27 @@ export class AddonRepository {
     return rows.map(mapAddonRow);
   }
 
+  listEnabled() {
+    const rows = this.database
+      .prepare(
+        `
+          SELECT
+            id,
+            name,
+            version,
+            description,
+            enabled,
+            manifest_json AS manifestJson
+          FROM addons
+          WHERE enabled = 1
+          ORDER BY name
+        `
+      )
+      .all() as AddonRow[];
+
+    return rows.map(mapAddonRow);
+  }
+
   findById(id: string) {
     const row = this.database
       .prepare(

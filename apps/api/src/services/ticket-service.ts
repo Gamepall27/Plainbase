@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Ticket } from "@plainbase/shared";
+import type { DemoAuthContext } from "../auth/demo-auth-context.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { TicketRepository } from "../db/repositories/ticket-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
@@ -30,18 +31,16 @@ export class TicketService {
     return this.ticketRepository.listByWorkspaceId(workspaceId);
   }
 
-  createTicket(input: unknown) {
+  createTicket(input: unknown, actor: DemoAuthContext) {
     const body = expectObject(input);
     const workspaceId = readRequiredString(body, "workspaceId");
     const title = readRequiredString(body, "title");
     const description = readRequiredText(body, "description");
-    const creatorId = readRequiredString(body, "creatorId");
     const status = readTicketStatus(body, "status", "Open");
     const documentId = readOptionalNullableString(body, "documentId");
     const assigneeId = readOptionalNullableString(body, "assigneeId");
 
     this.ensureWorkspaceExists(workspaceId);
-    this.ensureUserExists(creatorId, "creatorId");
     this.ensureOptionalUserExists(assigneeId, "assigneeId");
     this.ensureDocumentMatchesWorkspace(documentId, workspaceId, "documentId");
 
@@ -54,14 +53,14 @@ export class TicketService {
       title,
       description,
       status,
-      creatorId,
+      creatorId: actor.user.id,
       assigneeId: assigneeId ?? null,
       createdAt: timestamp,
       updatedAt: timestamp
     });
   }
 
-  updateTicket(ticketId: string, input: unknown) {
+  updateTicket(ticketId: string, input: unknown, _actor: DemoAuthContext) {
     const existingTicket = this.requireTicket(ticketId);
     const body = expectObject(input);
 

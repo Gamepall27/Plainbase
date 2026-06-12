@@ -1,6 +1,9 @@
 import type { AddonResponse, AddonsResponse } from "@plainbase/shared";
 import { Router } from "express";
+import { canManageAddons } from "../auth/permissions.js";
+import { requirePermission } from "../middleware/require-permission.js";
 import { AddonService } from "../services/addon-service.js";
+import { readRouteParam } from "../services/validation.js";
 
 export function createAddonRoutes(addonService: AddonService) {
   const router = Router();
@@ -16,16 +19,24 @@ export function createAddonRoutes(addonService: AddonService) {
     response.json(payload);
   });
 
-  router.put("/addons/:addonId/toggle", (request, response) => {
-    const payload: AddonResponse = {
-      success: true,
-      data: {
-        addon: addonService.toggleAddon(request.params.addonId)
-      }
-    };
+  router.put(
+    "/addons/:addonId/toggle",
+    requirePermission(
+      canManageAddons,
+      "The active demo user cannot manage addons."
+    ),
+    (request, response) => {
+      const addonId = readRouteParam(request.params, "addonId");
+      const payload: AddonResponse = {
+        success: true,
+        data: {
+          addon: addonService.toggleAddon(addonId)
+        }
+      };
 
-    response.json(payload);
-  });
+      response.json(payload);
+    }
+  );
 
   return router;
 }

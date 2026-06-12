@@ -86,3 +86,17 @@ Verfuegbare Endpunkte:
 - `GET /api/workspaces/:workspaceId/tickets`
 - `POST /api/tickets`
 - `PUT /api/tickets/:ticketId`
+
+## Demo Auth und RBAC
+
+- Die API nutzt aktuell eine Demo-Authentifizierung mit einem aktiven Demo-User im Backend.
+- Standardmaessig ist der `Admin User` aktiv.
+- Ueber `POST /api/demo-user/switch-role` kann zwischen `Admin`, `Editor` und `Viewer` gewechselt werden.
+- Der aktive Demo-User wird zentral pro Request in einen Auth-Context geladen, damit spaeter echtes Login, SSO und sichere Sessions darauf aufsetzen koennen.
+
+Aktuelle Rollenregeln:
+
+- `Admin` darf alle Aktionen ausfuehren.
+- `Editor` darf Dokumente erstellen und bearbeiten sowie Tickets erstellen und bearbeiten.
+- `Viewer` darf Dokumente lesen, aber keine Dokumente, Tickets oder Add-ons veraendern.
+- Dokument-Loeschen, Workspace-Erstellen und Add-on-Verwaltung sind nur fuer `Admin` erlaubt.
