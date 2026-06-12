@@ -1,9 +1,9 @@
 import type { AddonResponse, AddonsResponse } from "@plainbase/shared";
 import { Router } from "express";
-import { canManageAddons } from "../auth/permissions.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { AddonService } from "../services/addon-service.js";
 import { readRouteParam } from "../services/validation.js";
+import { canManageAddons } from "@plainbase/shared";
 
 export function createAddonRoutes(addonService: AddonService) {
   const router = Router();

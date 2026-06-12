@@ -1,9 +1,9 @@
 import type { TicketResponse, TicketsResponse } from "@plainbase/shared";
 import { Router } from "express";
-import { canCreateTicket, canEditTicket } from "../auth/permissions.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { TicketService } from "../services/ticket-service.js";
 import { readRouteParam } from "../services/validation.js";
+import { canCreateTicket, canEditTicket } from "@plainbase/shared";
 
 export function createTicketRoutes(ticketService: TicketService) {
   const router = Router();

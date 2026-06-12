@@ -1,4 +1,4 @@
-import type { Document, RoleName, Ticket } from "@plainbase/shared";
+import type { Addon, Document, RoleName, Ticket } from "@plainbase/shared";
 
 export type ExtensionType =
   | "sidebar-panel"
@@ -144,6 +144,11 @@ export type AddonDefinition<TRendered = unknown, TRouter = unknown> = {
   extensions: AddonExtension<TRendered, TRouter>[];
 };
 
+export type LegacyAddonSource = Pick<
+  Addon,
+  "id" | "name" | "version" | "description" | "manifestJson"
+>;
+
 export function defineAddon<TRendered = unknown, TRouter = unknown>(
   definition: AddonDefinition<TRendered, TRouter>
 ) {
@@ -154,6 +159,22 @@ export function parseAddonManifestJson(manifestJson: string) {
   const parsed = JSON.parse(manifestJson) as unknown;
 
   return parseAddonManifest(parsed);
+}
+
+export function parseAddonManifestFromAddon(addon: LegacyAddonSource) {
+  try {
+    return parseAddonManifestJson(addon.manifestJson);
+  } catch (error) {
+    const legacyManifest = parseLegacyAddonManifest(addon);
+
+    if (legacyManifest) {
+      return legacyManifest;
+    }
+
+    throw new Error(
+      `Addon "${addon.name}" hat ein ungueltiges Manifest: ${getErrorMessage(error)}`
+    );
+  }
 }
 
 export function parseAddonManifest(value: unknown): AddonManifest {
@@ -289,6 +310,77 @@ function readStringArray(value: unknown, field: string) {
   }
 
   return value;
+}
+
+function parseLegacyAddonManifest(addon: LegacyAddonSource): AddonManifest | null {
+  try {
+    const parsed = JSON.parse(addon.manifestJson) as Record<string, unknown>;
+    const entry = normalizeLegacyEntry(parsed.entry);
+
+    if (!entry) {
+      return null;
+    }
+
+    return {
+      id: readOptionalString(parsed.id) ?? addon.id,
+      name: readOptionalString(parsed.name) ?? addon.name,
+      version: readOptionalString(parsed.version) ?? addon.version,
+      description:
+        readOptionalString(parsed.description) ?? addon.description ?? undefined,
+      entry,
+      capabilities: readOptionalStringArray(parsed.capabilities),
+      extensions: undefined
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLegacyEntry(value: unknown) {
+  const entry = readOptionalString(value);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (!entry.includes("/")) {
+    return entry;
+  }
+
+  const segments = entry.split("/").filter(Boolean);
+  const indexPosition = segments.lastIndexOf("index.js");
+
+  if (indexPosition > 0) {
+    return segments[indexPosition - 1] ?? null;
+  }
+
+  const lastSegment = segments.at(-1);
+
+  if (!lastSegment) {
+    return null;
+  }
+
+  return lastSegment.replace(/\.js$/i, "");
+}
+
+function readOptionalStringArray(value: unknown) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    return undefined;
+  }
+
+  return value;
+}
+
+function readOptionalString(value: unknown) {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unknown error.";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

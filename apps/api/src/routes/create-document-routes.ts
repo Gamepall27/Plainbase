@@ -8,7 +8,7 @@ import {
   canCreateDocument,
   canDeleteDocument,
   canEditDocument
-} from "../auth/permissions.js";
+} from "@plainbase/shared";
 import { requirePermission } from "../middleware/require-permission.js";
 import { DocumentService } from "../services/document-service.js";
 import { readRouteParam } from "../services/validation.js";

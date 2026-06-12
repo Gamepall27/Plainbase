@@ -28,6 +28,34 @@ export type LibrarySummaryResponse = {
 
 export type RoleName = "Admin" | "Editor" | "Viewer";
 
+export function isAdmin(roleName: RoleName | null | undefined) {
+  return hasRole(roleName, "Admin");
+}
+
+export function canCreateDocument(roleName: RoleName | null | undefined) {
+  return hasRole(roleName, "Admin") || hasRole(roleName, "Editor");
+}
+
+export function canEditDocument(roleName: RoleName | null | undefined) {
+  return hasRole(roleName, "Admin") || hasRole(roleName, "Editor");
+}
+
+export function canDeleteDocument(roleName: RoleName | null | undefined) {
+  return isAdmin(roleName);
+}
+
+export function canManageAddons(roleName: RoleName | null | undefined) {
+  return isAdmin(roleName);
+}
+
+export function canCreateTicket(roleName: RoleName | null | undefined) {
+  return isAdmin(roleName) || hasRole(roleName, "Editor");
+}
+
+export function canEditTicket(roleName: RoleName | null | undefined) {
+  return isAdmin(roleName) || hasRole(roleName, "Editor");
+}
+
 export type TicketStatus = "Open" | "In Progress" | "Done";
 
 export type DatabaseSummary = {
@@ -222,3 +250,7 @@ export type TicketsResponse = ApiSuccessResponse<{
 export type TicketResponse = ApiSuccessResponse<{
   ticket: Ticket;
 }>;
+
+function hasRole(roleName: RoleName | null | undefined, expectedRole: RoleName) {
+  return roleName === expectedRole;
+}

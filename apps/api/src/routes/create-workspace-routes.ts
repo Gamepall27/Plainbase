@@ -3,9 +3,9 @@ import type {
   WorkspacesResponse
 } from "@plainbase/shared";
 import { Router } from "express";
-import { isAdmin } from "../auth/permissions.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { WorkspaceService } from "../services/workspace-service.js";
+import { isAdmin } from "@plainbase/shared";
 
 export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
   const router = Router();

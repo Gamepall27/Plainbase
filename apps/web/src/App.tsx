@@ -7,16 +7,16 @@ import type {
   Ticket,
   Workspace
 } from "@plainbase/shared";
+import {
+  canCreateDocument,
+  canEditDocument,
+  canManageAddons
+} from "@plainbase/shared";
 import { AddonRegistry } from "./addons/addon-registry";
 import { apiClient, ApiClientError } from "./api/client";
 import { DocumentEditorPane } from "./components/DocumentEditorPane";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import type { EditorDraft } from "./editor/types";
-import {
-  canCreateDocument,
-  canEditDocument,
-  canManageAddons
-} from "./lib/permissions";
 
 type LoadState<T> =
   | { status: "loading" }
