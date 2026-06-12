@@ -44,3 +44,45 @@ Wenn `5173` oder `3001` bereits belegt sind, waehlt `npm run dev` automatisch de
 - Die API liest den Ordner rekursiv und behandelt `.md`-Dateien in allen Unterordnern als Wissensbasis.
 - Die Datenbanklogik liegt bewusst getrennt von den Express-Routen unter `apps/api/src/db`.
 - Beim Start werden folgende Seed-Daten idempotent angelegt: Rollen `Admin`, `Editor`, `Viewer`; drei Demo-Benutzer; der Workspace `Demo Company Workspace`; die Dokumente `Welcome`, `Engineering Notes`, `Meeting Notes`; zwei Beispiel-Tickets; die Add-ons `Tickets` und `Diagrams`.
+
+## REST API
+
+Alle modellbezogenen Endpunkte liefern konsistente Response-Objekte:
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+Fehler sehen so aus:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed."
+  }
+}
+```
+
+Verfuegbare Endpunkte:
+
+- `GET /api/workspaces`
+- `POST /api/workspaces`
+- `GET /api/workspaces/:workspaceId/documents`
+- `GET /api/documents/:documentId`
+- `POST /api/documents`
+- `PUT /api/documents/:documentId`
+- `DELETE /api/documents/:documentId`
+- `GET /api/users`
+- `GET /api/demo-user`
+- `POST /api/demo-user/switch-role`
+- `GET /api/roles`
+- `GET /api/addons`
+- `PUT /api/addons/:addonId/toggle`
+- `GET /api/workspaces/:workspaceId/tickets`
+- `POST /api/tickets`
+- `PUT /api/tickets/:ticketId`

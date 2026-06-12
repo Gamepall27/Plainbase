@@ -173,6 +173,11 @@ const addons: Addon[] = [
   }
 ];
 
+const appState = {
+  key: "demo_user_id",
+  value: "user-admin"
+};
+
 export function seedDatabase(database: DatabaseSync) {
   const insertWorkspace = database.prepare(`
     INSERT INTO workspaces (id, name, slug, created_at, updated_at)
@@ -231,6 +236,12 @@ export function seedDatabase(database: DatabaseSync) {
       description = excluded.description,
       enabled = excluded.enabled,
       manifest_json = excluded.manifest_json
+  `);
+  const insertAppState = database.prepare(`
+    INSERT INTO app_state (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value
   `);
   const insertTicket = database.prepare(`
     INSERT INTO tickets (
@@ -304,6 +315,8 @@ export function seedDatabase(database: DatabaseSync) {
         addon.manifestJson
       );
     }
+
+    insertAppState.run(appState.key, appState.value);
 
     for (const ticket of tickets) {
       insertTicket.run(
