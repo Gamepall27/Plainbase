@@ -1,20 +1,7 @@
-import cors from "cors";
-import express from "express";
 import { apiConfig } from "./config.js";
-import { ContentStore } from "./content/content-store.js";
-import { PlainbaseDatabase } from "./db/plainbase-database.js";
-import { registerRoutes } from "./routes/register-routes.js";
+import { createPlainbaseApiApp } from "./app.js";
 
-const app = express();
-const contentStore = new ContentStore(apiConfig.contentRoot);
-const database = new PlainbaseDatabase(apiConfig.databasePath);
-
-database.initialize();
-
-app.use(cors());
-app.use(express.json());
-
-registerRoutes(app, { contentStore, database });
+const { app, database } = createPlainbaseApiApp();
 
 const server = app.listen(apiConfig.port, apiConfig.host, () => {
   console.log(

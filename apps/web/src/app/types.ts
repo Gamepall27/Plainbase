@@ -40,3 +40,12 @@ export type QuickLinkId =
 export type TicketFilter = Ticket["status"];
 
 export type SelectedDocument = Document | null;
+
+export type WorkspaceTab = {
+  id: string;
+  documentId: string | null;
+  kind: DocumentKind;
+  title: string;
+  isActive: boolean;
+  isDirty: boolean;
+};

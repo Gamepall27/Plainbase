@@ -63,8 +63,6 @@ export function App() {
   }, [isAdminToolsOpen, permissions.mayManageUsers]);
 
   const documentFolders = buildSidebarFolders(data.documents, state.draft);
-  const currentTabTitle =
-    state.draft?.title.trim() || data.selectedDocument?.title || "Neues Objekt";
   const linkedDocuments = data.documents
     .filter(
       (document) =>
@@ -88,6 +86,13 @@ export function App() {
     if (created?.kind && created.kind !== "folder") {
       setShowSourceEditor(true);
     }
+  }
+
+  function handleCreateTab() {
+    setActiveMainView("document");
+    setIsAdminToolsOpen(false);
+    actions.createTab();
+    setShowSourceEditor(true);
   }
 
   function handleOpenAdminTools() {
@@ -174,21 +179,18 @@ export function App() {
         ) : activeMainView === "tickets" ? (
           <TicketsWorkspaceView
             documents={data.documents}
-            mayCreateDocument={permissions.mayCreateDocument}
             selectedWorkspace={data.selectedWorkspace}
             tickets={data.tickets}
-            onCreateEntry={(kind) => void handleCreateEntry(kind)}
+            onCreateTab={handleCreateTab}
             onDocumentSelect={handleSelectDocument}
           />
         ) : (
           <DocumentWorkspace
             activeRole={data.activeRole}
-            currentTabTitle={currentTabTitle}
             documentState={state.documentState}
             draft={state.draft}
             hasUnsavedChanges={state.hasUnsavedChanges}
             markdownBlockRenderers={data.markdownBlockRenderers}
-            mayCreateDocument={permissions.mayCreateDocument}
             mayEditDocument={permissions.mayEditDocument}
             roleSwitchStatus={state.roleSwitchStatus}
             saveState={state.saveState}
@@ -196,14 +198,17 @@ export function App() {
             selectedWorkspace={data.selectedWorkspace}
             selectedWorkspaceId={state.selectedWorkspaceId}
             showSourceEditor={showSourceEditor}
+            tabs={state.tabs}
             tickets={data.tickets}
             usersState={state.usersState}
             mayManageUsers={permissions.mayManageUsers}
-            onCreateEntry={(kind) => void handleCreateEntry(kind)}
+            onCreateTab={handleCreateTab}
             onDraftChange={actions.updateDraft}
             onOpenAdminTools={handleOpenAdminTools}
             onSaveDocument={() => void actions.saveDocument()}
             onShowSourceEditorChange={setShowSourceEditor}
+            onTabClose={actions.closeTab}
+            onTabSelect={actions.setActiveTabId}
           />
         )}
 

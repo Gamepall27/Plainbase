@@ -8,10 +8,17 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build -w @plainbase/shared && npm run build -w @plainbase/addon-sdk && npm run build -w @plainbase/api && npm run build -w @plainbase/web"
+    "build": "npm run build -w @plainbase/shared && npm run build -w @plainbase/addon-sdk && npm run build -w @plainbase/api && npm run build -w @plainbase/web",
+    "test": "npm run test:unit && npm run test:api && npm run test:e2e",
+    "test:unit": "tsx --test tests/unit/**/*.test.ts",
+    "test:api": "tsx --test tests/api/**/*.test.ts",
+    "test:e2e": "playwright test",
+    "verify": "npm run build && npm run test"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
+    "@playwright/test": "^1.60.0",
+    "concurrently": "^9.0.1",
+    "tsx": "^4.22.4"
   },
   "engines": {
     "node": ">=24.0.0"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   Addon,
   DemoAuth,
@@ -20,7 +20,7 @@ import {
 } from "@plainbase/shared";
 import { AddonRegistry } from "../addons/addon-registry";
 import { apiClient } from "../api/client";
-import type { LoadState, SaveState } from "../app/types";
+import type { LoadState, SaveState, WorkspaceTab } from "../app/types";
 import type { EditorDraft } from "../editor/types";
 import { getErrorMessage } from "../lib/app-errors";
 import {
@@ -36,9 +36,6 @@ export function useWorkspaceApp() {
   const [documentsState, setDocumentsState] = useState<LoadState<Document[]>>({
     status: "loading"
   });
-  const [documentState, setDocumentState] = useState<LoadState<Document> | null>(
-    null
-  );
   const [addonsState, setAddonsState] = useState<LoadState<Addon[]>>({
     status: "loading"
   });
@@ -62,11 +59,8 @@ export function useWorkspaceApp() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
     null
   );
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
-    null
-  );
-  const [draft, setDraft] = useState<EditorDraft | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [openTabs, setOpenTabs] = useState<EditorTabState[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [roleSwitchStatus, setRoleSwitchStatus] = useState<SaveState>({
     status: "idle"
@@ -78,6 +72,17 @@ export function useWorkspaceApp() {
     status: "idle"
   });
   const [pendingAddonId, setPendingAddonId] = useState<string | null>(null);
+  const openTabsRef = useRef<EditorTabState[]>([]);
+  const activeTabIdRef = useRef<string | null>(null);
+  const initializedWorkspaceIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    openTabsRef.current = openTabs;
+  }, [openTabs]);
+
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
 
   useEffect(() => {
     void loadShellData();
@@ -102,6 +107,9 @@ export function useWorkspaceApp() {
   }, [addonsState]);
 
   useEffect(() => {
+    initializedWorkspaceIdRef.current = null;
+    updateTabs([], null);
+
     if (!selectedWorkspaceId) {
       setDocumentsState({ status: "error", message: "Kein Workspace gewaehlt." });
       setTicketsState({ status: "error", message: "Kein Workspace gewaehlt." });
@@ -124,15 +132,6 @@ export function useWorkspaceApp() {
       window.clearInterval(intervalId);
     };
   }, [selectedWorkspaceId]);
-
-  useEffect(() => {
-    if (!selectedDocumentId) {
-      setDocumentState(null);
-      return;
-    }
-
-    void loadDocument(selectedDocumentId);
-  }, [selectedDocumentId]);
 
   async function loadShellData() {
     const [
@@ -218,36 +217,23 @@ export function useWorkspaceApp() {
     if (documentsResult.status === "fulfilled") {
       const documents = documentsResult.value;
       setDocumentsState({ status: "success", data: documents });
+      const shouldInitializeTabs =
+        initializedWorkspaceIdRef.current !== workspaceId;
+      const syncedTabs = syncTabsForWorkspace(
+        openTabsRef.current,
+        workspaceId,
+        documents
+      );
+      const nextTabs =
+        shouldInitializeTabs && syncedTabs.length === 0
+          ? createInitialTabs(workspaceId, documents)
+          : syncedTabs;
 
-      setSelectedDocumentId((currentDocumentId) => {
-        const selectedDocument =
-          currentDocumentId
-            ? documents.find((item) => item.id === currentDocumentId)
-            : null;
-
-        if (
-          currentDocumentId &&
-          selectedDocument &&
-          selectedDocument.kind !== "folder"
-        ) {
-          return currentDocumentId;
-        }
-
-        const nextDocumentId =
-          documents.find((item) => item.kind !== "folder")?.id ?? null;
-
-        if (!nextDocumentId) {
-          if (documents.length === 0) {
-            setDraft(createEmptyDraft(workspaceId));
-          } else {
-            setDraft(null);
-          }
-          setHasUnsavedChanges(false);
-          setDocumentState(null);
-        }
-
-        return nextDocumentId;
-      });
+      updateTabs(
+        nextTabs,
+        resolveActiveTabId(activeTabIdRef.current, nextTabs)
+      );
+      initializedWorkspaceIdRef.current = workspaceId;
     } else {
       setDocumentsState({
         status: "error",
@@ -261,23 +247,6 @@ export function useWorkspaceApp() {
       setTicketsState({
         status: "error",
         message: getErrorMessage(ticketsResult.reason)
-      });
-    }
-  }
-
-  async function loadDocument(documentId: string) {
-    setDocumentState({ status: "loading" });
-
-    try {
-      const document = await apiClient.getDocument(documentId);
-      setDocumentState({ status: "success", data: document });
-      setDraft(mapDocumentToDraft(document));
-      setHasUnsavedChanges(false);
-      setSaveState({ status: "idle" });
-    } catch (error) {
-      setDocumentState({
-        status: "error",
-        message: getErrorMessage(error)
       });
     }
   }
@@ -357,6 +326,8 @@ export function useWorkspaceApp() {
     try {
       const existingDocuments =
         documentsState.status === "success" ? documentsState.data : [];
+      const selectedDocumentId = getActiveTab(openTabsRef.current, activeTabIdRef.current)
+        ?.documentId;
       const selectedDocument =
         selectedDocumentId
           ? existingDocuments.find((document) => document.id === selectedDocumentId) ??
@@ -376,10 +347,7 @@ export function useWorkspaceApp() {
       });
 
       if (createdDocument.kind !== "folder") {
-        setSelectedDocumentId(createdDocument.id);
-        setDocumentState({ status: "success", data: createdDocument });
-        setDraft(mapDocumentToDraft(createdDocument));
-        setHasUnsavedChanges(false);
+        activateDocument(createdDocument);
       }
       setSaveState({
         status: "success",
@@ -479,13 +447,16 @@ export function useWorkspaceApp() {
   }
 
   async function saveDocument() {
-    if (!draft || !selectedWorkspaceId) {
+    const activeTab = getActiveTab(openTabsRef.current, activeTabIdRef.current);
+
+    if (!activeTab || !selectedWorkspaceId) {
       return;
     }
 
     setSaveState({ status: "saving" });
 
     try {
+      const draft = activeTab.draft;
       const title = draft.title.trim() || "Untitled document";
       const slug = draft.slug.trim() || slugify(title);
 
@@ -505,9 +476,11 @@ export function useWorkspaceApp() {
             content: draft.content
           });
 
-      setDraft(mapDocumentToDraft(savedDocument));
-      setSelectedDocumentId(savedDocument.id);
-      setHasUnsavedChanges(false);
+      updateTab(activeTab.id, {
+        documentId: savedDocument.id,
+        draft: mapDocumentToDraft(savedDocument),
+        isDirty: false
+      });
       setSaveState({
         status: "success",
         message: `"${savedDocument.title}" wurde gespeichert.`
@@ -523,23 +496,26 @@ export function useWorkspaceApp() {
   }
 
   function updateDraft(nextDraft: EditorDraft) {
-    setDraft((current) => {
-      if (!current) {
-        return nextDraft;
-      }
+    const activeTab = getActiveTab(openTabsRef.current, activeTabIdRef.current);
 
-      const shouldUpdateSlug =
-        current.slug === "" || current.slug === slugify(current.title);
+    if (!activeTab) {
+      return;
+    }
 
-      return {
+    const currentDraft = activeTab.draft;
+    const shouldUpdateSlug =
+      currentDraft.slug === "" || currentDraft.slug === slugify(currentDraft.title);
+
+    updateTab(activeTab.id, {
+      draft: {
         ...nextDraft,
         slug:
-          nextDraft.slug === current.slug && shouldUpdateSlug
+          nextDraft.slug === currentDraft.slug && shouldUpdateSlug
             ? slugify(nextDraft.title)
             : slugify(nextDraft.slug)
-      };
+      },
+      isDirty: true
     });
-    setHasUnsavedChanges(true);
     setSaveState({ status: "idle" });
   }
 
@@ -566,7 +542,10 @@ export function useWorkspaceApp() {
       }
 
       const nextSlug = createUniqueSlugForTitle(documents, nextTitle, documentId);
-      const selectedDraft = draft?.id === documentId ? draft : null;
+      const selectedTab = openTabsRef.current.find(
+        (tab) => tab.documentId === documentId
+      );
+      const selectedDraft = selectedTab?.draft ?? null;
       const updatePayload = {
         title: nextTitle,
         slug: nextSlug
@@ -582,11 +561,18 @@ export function useWorkspaceApp() {
 
       const updatedDocument = await apiClient.updateDocument(documentId, updatePayload);
 
-      if (selectedDraft?.id === documentId) {
-        setDocumentState({ status: "success", data: updatedDocument });
-        setDraft(mapDocumentToDraft(updatedDocument));
-        setHasUnsavedChanges(false);
-      }
+      updateTabs(
+        openTabsRef.current.map((tab) =>
+          tab.documentId === documentId
+            ? {
+                ...tab,
+                draft: mapDocumentToDraft(updatedDocument),
+                isDirty: false
+              }
+            : tab
+        ),
+        activeTabIdRef.current
+      );
 
       setSaveState({
         status: "success",
@@ -620,12 +606,7 @@ export function useWorkspaceApp() {
 
       await apiClient.deleteDocument(documentId);
 
-      if (selectedDocumentId === documentId) {
-        setSelectedDocumentId(null);
-        setDocumentState(null);
-        setDraft(null);
-        setHasUnsavedChanges(false);
-      }
+      closeTabsForDocument(documentId);
 
       setSaveState({
         status: "success",
@@ -842,10 +823,30 @@ export function useWorkspaceApp() {
   const tickets = ticketsState.status === "success" ? ticketsState.data : [];
   const addonRegistry =
     addonRegistryState.status === "success" ? addonRegistryState.data : null;
+  const activeTab = getActiveTab(openTabs, activeTabId);
+  const selectedDocumentId = activeTab?.documentId ?? null;
+  const draft = activeTab?.draft ?? null;
+  const hasUnsavedChanges = activeTab?.isDirty ?? false;
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null;
   const selectedDocument =
-    documentState?.status === "success" ? documentState.data : null;
+    selectedDocumentId
+      ? documents.find((document) => document.id === selectedDocumentId) ?? null
+      : null;
+  const documentState = selectedDocument
+    ? ({
+        status: "success",
+        data: selectedDocument
+      } satisfies LoadState<Document>)
+    : null;
+  const tabs: WorkspaceTab[] = openTabs.map((tab) => ({
+    id: tab.id,
+    documentId: tab.documentId,
+    kind: tab.draft.kind,
+    title: tab.draft.title.trim() || "Neues Objekt",
+    isActive: tab.id === activeTabId,
+    isDirty: tab.isDirty
+  }));
 
   return {
     state: {
@@ -859,7 +860,9 @@ export function useWorkspaceApp() {
       ticketsState,
       usersState,
       selectedWorkspaceId,
+      activeTabId,
       selectedDocumentId,
+      tabs,
       draft,
       hasUnsavedChanges,
       saveState,
@@ -895,6 +898,9 @@ export function useWorkspaceApp() {
     actions: {
       setSelectedWorkspaceId,
       setSelectedDocumentId,
+      createTab,
+      setActiveTabId: setTabActive,
+      closeTab,
       signIn,
       changeRole,
       signOut,
@@ -911,7 +917,126 @@ export function useWorkspaceApp() {
       createWorkspace
     }
   };
+
+  function createTab() {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const nextTab = createDraftTab(selectedWorkspaceId);
+    updateTabs([...openTabsRef.current, nextTab], nextTab.id);
+    setSaveState({ status: "idle" });
+  }
+
+  function setTabActive(tabId: string) {
+    if (!openTabsRef.current.some((tab) => tab.id === tabId)) {
+      return;
+    }
+
+    activeTabIdRef.current = tabId;
+    setActiveTabId(tabId);
+    setSaveState({ status: "idle" });
+  }
+
+  function closeTab(tabId: string) {
+    const currentTabs = openTabsRef.current;
+    const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId);
+
+    if (tabIndex === -1) {
+      return;
+    }
+
+    const nextTabs = currentTabs.filter((tab) => tab.id !== tabId);
+    const nextActiveTabId =
+      activeTabIdRef.current === tabId
+        ? nextTabs[tabIndex]?.id ?? nextTabs[tabIndex - 1]?.id ?? null
+        : activeTabIdRef.current;
+
+    updateTabs(nextTabs, nextActiveTabId);
+    setSaveState({ status: "idle" });
+  }
+
+  function activateDocument(document: Document) {
+    const existingTab = openTabsRef.current.find(
+      (tab) => tab.documentId === document.id
+    );
+
+    if (existingTab) {
+      updateTabs(openTabsRef.current, existingTab.id);
+      return;
+    }
+
+    const nextTab = createDocumentTab(document);
+    updateTabs([...openTabsRef.current, nextTab], nextTab.id);
+  }
+
+  function setSelectedDocumentId(documentId: string | null) {
+    if (!documentId || documentsState.status !== "success") {
+      return;
+    }
+
+    const document = documentsState.data.find(
+      (entry) => entry.id === documentId && entry.kind !== "folder"
+    );
+
+    if (!document) {
+      return;
+    }
+
+    activateDocument(document);
+  }
+
+  function updateTab(
+    tabId: string,
+    updates: Partial<Pick<EditorTabState, "documentId" | "draft" | "isDirty">>
+  ) {
+    updateTabs(
+      openTabsRef.current.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              ...updates
+            }
+          : tab
+      ),
+      activeTabIdRef.current
+    );
+  }
+
+  function closeTabsForDocument(documentId: string) {
+    const currentTabs = openTabsRef.current;
+    const nextTabs = currentTabs.filter((tab) => tab.documentId !== documentId);
+
+    if (nextTabs.length === currentTabs.length) {
+      return;
+    }
+
+    const activeTabIndex = currentTabs.findIndex(
+      (tab) => tab.id === activeTabIdRef.current
+    );
+    const nextActiveTabId = resolveActiveTabId(
+      activeTabIdRef.current,
+      nextTabs,
+      activeTabIndex
+    );
+
+    updateTabs(nextTabs, nextActiveTabId);
+  }
+
+  function updateTabs(nextTabs: EditorTabState[], nextActiveTabId: string | null) {
+    openTabsRef.current = nextTabs;
+    activeTabIdRef.current = nextActiveTabId;
+    setOpenTabs(nextTabs);
+    setActiveTabId(nextActiveTabId);
+  }
 }
+
+type EditorTabState = {
+  id: string;
+  documentId: string | null;
+  draft: EditorDraft;
+  isDirty: boolean;
+};
 
 function createUniqueDocumentIdentity(
   documents: Document[],
@@ -996,6 +1121,95 @@ function getSiblingDocuments(documents: Document[], parentId: string | null) {
 
       return left.title.localeCompare(right.title);
     });
+}
+
+function createDocumentTab(document: Document): EditorTabState {
+  return {
+    id: createTabId(),
+    documentId: document.id,
+    draft: mapDocumentToDraft(document),
+    isDirty: false
+  };
+}
+
+function createDraftTab(workspaceId: string): EditorTabState {
+  return {
+    id: createTabId(),
+    documentId: null,
+    draft: createEmptyDraft(workspaceId),
+    isDirty: false
+  };
+}
+
+function createInitialTabs(workspaceId: string, documents: Document[]) {
+  const firstDocument = documents.find((document) => document.kind !== "folder");
+
+  return firstDocument ? [createDocumentTab(firstDocument)] : [createDraftTab(workspaceId)];
+}
+
+function syncTabsForWorkspace(
+  tabs: EditorTabState[],
+  workspaceId: string,
+  documents: Document[]
+) {
+  return tabs.flatMap((tab) => {
+    if (tab.draft.workspaceId !== workspaceId) {
+      return [];
+    }
+
+    if (!tab.documentId) {
+      return [tab];
+    }
+
+    const matchingDocument = documents.find(
+      (document) => document.id === tab.documentId && document.kind !== "folder"
+    );
+
+    if (!matchingDocument) {
+      return [];
+    }
+
+    if (tab.isDirty) {
+      return [
+        {
+          ...tab,
+          draft: {
+            ...tab.draft,
+            workspaceId: matchingDocument.workspaceId,
+            parentId: matchingDocument.parentId,
+            kind: matchingDocument.kind
+          }
+        }
+      ];
+    }
+
+    return [
+      {
+        ...tab,
+        draft: mapDocumentToDraft(matchingDocument)
+      }
+    ];
+  });
+}
+
+function getActiveTab(tabs: EditorTabState[], activeTabId: string | null) {
+  return tabs.find((tab) => tab.id === activeTabId) ?? null;
+}
+
+function resolveActiveTabId(
+  preferredTabId: string | null,
+  tabs: EditorTabState[],
+  fallbackIndex = 0
+) {
+  if (preferredTabId && tabs.some((tab) => tab.id === preferredTabId)) {
+    return preferredTabId;
+  }
+
+  return tabs[fallbackIndex]?.id ?? tabs[fallbackIndex - 1]?.id ?? tabs[0]?.id ?? null;
+}
+
+function createTabId() {
+  return `tab-${crypto.randomUUID()}`;
 }
 
 async function groupDocumentsIntoFolder(

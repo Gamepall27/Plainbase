@@ -1,26 +1,24 @@
-import type { Document, DocumentKind, Ticket, Workspace } from "@plainbase/shared";
+import type { Document, Ticket, Workspace } from "@plainbase/shared";
 import { formatTimestamp } from "../../lib/formatters";
 import {
   formatTicketFilterLabel,
   getTicketStatusClassName
 } from "../../lib/ticket-format";
-import { CreateObjectMenuButton } from "../layout/CreateObjectMenuButton";
+import { AnimatedCreateTabButton } from "../layout/AnimatedCreateTabButton";
 
 type TicketsWorkspaceViewProps = {
   documents: Document[];
-  mayCreateDocument: boolean;
   selectedWorkspace: Workspace | null;
   tickets: Ticket[];
-  onCreateEntry: (kind: DocumentKind) => void;
+  onCreateTab: () => void;
   onDocumentSelect: (documentId: string) => void;
 };
 
 export function TicketsWorkspaceView({
   documents,
-  mayCreateDocument,
   selectedWorkspace,
   tickets,
-  onCreateEntry,
+  onCreateTab,
   onDocumentSelect
 }: TicketsWorkspaceViewProps) {
   const documentsWithTickets = documents
@@ -39,15 +37,8 @@ export function TicketsWorkspaceView({
       <div className="document-tabs">
         <button type="button" className="document-tab active">
           <span>Tickets</span>
-          <span className="document-tab-close">x</span>
         </button>
-        <CreateObjectMenuButton
-          ariaLabel="Neues Objekt anlegen"
-          className="document-tab-add"
-          disabled={!mayCreateDocument}
-          label="+"
-          onSelect={onCreateEntry}
-        />
+        <AnimatedCreateTabButton onCreateTab={onCreateTab} />
       </div>
 
       <div className="document-shell">

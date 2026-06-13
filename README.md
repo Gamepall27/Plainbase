@@ -36,6 +36,28 @@ Zum Ueberpruefen des Builds:
 npm run build
 ```
 
+Zum lokalen Ausfuehren der Qualitaets-Gates:
+
+```bash
+npm test
+```
+
+Einzeln:
+
+```bash
+npm run test:unit
+npm run test:api
+npm run test:e2e
+```
+
+Beim ersten E2E-Lauf muss zusaetzlich der Playwright-Browser installiert werden:
+
+```bash
+npx playwright install chromium
+```
+
+Die E2E-Tests starten Frontend und API selbst. Du musst davor also nicht separat `npm run dev` starten.
+
 ### Wichtige Environment-Variablen
 
 | Variable | Default | Zweck |
@@ -113,6 +135,21 @@ Wichtige API-Bereiche:
 - `GET /api/addons/tickets`, `GET /api/addons/diagrams` fuer die Add-on-Backend-Routen
 
 Die API verwendet fuer erfolgreiche Antworten das Schema `{ success: true, data: ... }`. Fehler kommen als strukturierte API-Fehler mit Code, Nachricht und optionalen Details zurueck.
+
+## Tests und CI
+
+Plainbase hat jetzt drei Testebenen:
+
+- Unit-Tests fuer Kernlogik
+- API-Tests fuer Rechte, Demo-Auth, Workspaces, Dokumente und Tickets
+- E2E-Smoke-Tests fuer kritische UI-Flows wie Anmeldung, Theme-Umschaltung, Kanban und Ticket-Ansicht
+
+Die GitHub-CI unter `.github/workflows/ci.yml` fuehrt diese Gates in folgender Reihenfolge aus:
+
+1. `npm run build`
+2. `npm run test:unit`
+3. `npm run test:api`
+4. `npm run test:e2e`
 
 ## SQLite-Datenbank
 

@@ -1,14 +1,13 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MarkdownBlockRendererExtension } from "@plainbase/addon-sdk";
 import type {
   Document,
-  DocumentKind,
   RoleName,
   Ticket,
   User,
   Workspace
 } from "@plainbase/shared";
-import type { LoadState, SaveState } from "../../app/types";
+import type { LoadState, SaveState, WorkspaceTab } from "../../app/types";
 import { countWords } from "../../lib/document-draft";
 import { formatTimestamp } from "../../lib/formatters";
 import {
@@ -18,12 +17,12 @@ import {
 import type { EditorDraft } from "../../editor/types";
 import type { FormattingAction } from "../../editor/markdown-format";
 import { MarkdownPreview } from "../MarkdownPreview";
-import { CreateObjectMenuButton } from "../layout/CreateObjectMenuButton";
 import {
   DocumentEditorPane,
   type DocumentEditorPaneHandle
 } from "../DocumentEditorPane";
 import { EditorFormattingToolbar } from "../EditorFormattingToolbar";
+import { AnimatedCreateTabButton } from "../layout/AnimatedCreateTabButton";
 import {
   PreviewEditor,
   type PreviewEditorHandle
@@ -31,12 +30,10 @@ import {
 
 type DocumentWorkspaceProps = {
   activeRole: RoleName | null;
-  currentTabTitle: string;
   documentState: LoadState<Document> | null;
   draft: EditorDraft | null;
   hasUnsavedChanges: boolean;
   markdownBlockRenderers: MarkdownBlockRendererExtension<string>[];
-  mayCreateDocument: boolean;
   mayEditDocument: boolean;
   mayManageUsers: boolean;
   saveState: SaveState;
@@ -44,24 +41,25 @@ type DocumentWorkspaceProps = {
   selectedWorkspace: Workspace | null;
   selectedWorkspaceId: string | null;
   showSourceEditor: boolean;
+  tabs: WorkspaceTab[];
   roleSwitchStatus: SaveState;
   tickets: Ticket[];
   usersState: LoadState<User[]>;
-  onCreateEntry: (kind: DocumentKind) => void;
+  onCreateTab: () => void;
   onDraftChange: (draft: EditorDraft) => void;
   onOpenAdminTools: () => void;
   onSaveDocument: () => void;
   onShowSourceEditorChange: (show: boolean) => void;
+  onTabClose: (tabId: string) => void;
+  onTabSelect: (tabId: string) => void;
 };
 
 export function DocumentWorkspace({
   activeRole,
-  currentTabTitle,
   documentState,
   draft,
   hasUnsavedChanges,
   markdownBlockRenderers,
-  mayCreateDocument,
   mayEditDocument,
   mayManageUsers,
   saveState,
@@ -69,19 +67,54 @@ export function DocumentWorkspace({
   selectedWorkspace,
   selectedWorkspaceId,
   showSourceEditor,
+  tabs,
   roleSwitchStatus,
   tickets,
   usersState,
-  onCreateEntry,
+  onCreateTab,
   onDraftChange,
   onOpenAdminTools,
   onSaveDocument,
-  onShowSourceEditorChange
+  onShowSourceEditorChange,
+  onTabClose,
+  onTabSelect
 }: DocumentWorkspaceProps) {
   const previewEditorRef = useRef<PreviewEditorHandle | null>(null);
   const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
+  const previousTabIdsRef = useRef<string[]>(tabs.map((tab) => tab.id));
+  const enteringTimeoutRef = useRef<number | null>(null);
   const wordCount = countWords(draft?.content ?? "");
   const isKanbanBoard = selectedDocument?.kind === "kanban";
+  const currentTabTitle =
+    draft?.title.trim() || selectedDocument?.title || "Neues Objekt";
+  const [enteringTabId, setEnteringTabId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const previousTabIds = previousTabIdsRef.current;
+    const addedActiveTab = tabs.find(
+      (tab) => tab.isActive && !previousTabIds.includes(tab.id)
+    );
+
+    if (addedActiveTab) {
+      setEnteringTabId(addedActiveTab.id);
+
+      if (enteringTimeoutRef.current !== null) {
+        window.clearTimeout(enteringTimeoutRef.current);
+      }
+
+      enteringTimeoutRef.current = window.setTimeout(() => {
+        setEnteringTabId(null);
+      }, 240);
+    }
+
+    previousTabIdsRef.current = tabs.map((tab) => tab.id);
+
+    return () => {
+      if (enteringTimeoutRef.current !== null) {
+        window.clearTimeout(enteringTimeoutRef.current);
+      }
+    };
+  }, [tabs]);
 
   function applyFormatting(action: FormattingAction) {
     previewEditorRef.current?.applyFormatting(action);
@@ -90,17 +123,30 @@ export function DocumentWorkspace({
   return (
     <section className="main-stage">
       <div className="document-tabs">
-        <button type="button" className="document-tab active">
-          <span>{currentTabTitle}</span>
-          <span className="document-tab-close">x</span>
-        </button>
-        <CreateObjectMenuButton
-          ariaLabel="Neues Objekt anlegen"
-          className="document-tab-add"
-          disabled={!mayCreateDocument}
-          label="+"
-          onSelect={onCreateEntry}
-        />
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={getDocumentTabClassName(tab, enteringTabId)}
+          >
+            <button
+              type="button"
+              className="document-tab-trigger"
+              onClick={() => onTabSelect(tab.id)}
+            >
+              {tab.isDirty && <span className="document-tab-dirty" aria-hidden="true" />}
+              <span className="document-tab-title">{tab.title}</span>
+            </button>
+            <button
+              type="button"
+              className="document-tab-close"
+              aria-label={`${tab.title} schliessen`}
+              onClick={() => onTabClose(tab.id)}
+            >
+              x
+            </button>
+          </div>
+        ))}
+        <AnimatedCreateTabButton onCreateTab={onCreateTab} />
       </div>
 
       <div className="document-shell">
@@ -261,6 +307,20 @@ export function DocumentWorkspace({
       </div>
     </section>
   );
+}
+
+function getDocumentTabClassName(tab: WorkspaceTab, enteringTabId: string | null) {
+  const classNames = ["document-tab"];
+
+  if (tab.isActive) {
+    classNames.push("active");
+  }
+
+  if (tab.id === enteringTabId) {
+    classNames.push("is-entering");
+  }
+
+  return classNames.join(" ");
 }
 
 type DocumentToolbarProps = {

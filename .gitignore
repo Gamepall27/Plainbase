@@ -2,3 +2,6 @@ node_modules
 dist
 .DS_Store
 apps/api/data
+.tmp
+test-results
+playwright-report
