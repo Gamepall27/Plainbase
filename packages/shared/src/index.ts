@@ -78,14 +78,20 @@ export type Workspace = {
   id: string;
   name: string;
   slug: string;
+  rootPath: string;
   createdAt: string;
   updatedAt: string;
 };
+
+export type DocumentKind = "document" | "folder";
 
 export type Document = {
   id: string;
   workspaceId: string;
   parentId: string | null;
+  kind: DocumentKind;
+  sortOrder: number;
+  filePath?: string;
   title: string;
   slug: string;
   content: string;
@@ -167,6 +173,7 @@ export type ApiSuccessResponse<T> = {
 export type CreateWorkspaceRequest = {
   name: string;
   slug: string;
+  rootPath: string;
 };
 
 export type WorkspacesResponse = ApiSuccessResponse<{
@@ -180,6 +187,8 @@ export type WorkspaceResponse = ApiSuccessResponse<{
 export type CreateDocumentRequest = {
   workspaceId: string;
   parentId?: string | null;
+  kind?: DocumentKind;
+  sortOrder?: number;
   title: string;
   slug: string;
   content: string;
@@ -187,6 +196,7 @@ export type CreateDocumentRequest = {
 
 export type UpdateDocumentRequest = {
   parentId?: string | null;
+  sortOrder?: number;
   title?: string;
   slug?: string;
   content?: string;

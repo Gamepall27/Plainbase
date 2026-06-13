@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import type { Role, User } from "@plainbase/shared";
+import type { Role, User, Workspace } from "@plainbase/shared";
 import type { LoadState, SaveState } from "../../app/types";
 
 type AdminToolsPanelProps = {
   roles: Role[];
+  selectedWorkspace: Workspace | null;
   selectedWorkspaceName: string | null;
   userMutationStatus: SaveState;
   usersState: LoadState<User[]>;
+  workspaceMutationStatus: SaveState;
+  workspacesState: LoadState<Workspace[]>;
   onClose: () => void;
   onUserCreate: (input: {
     name: string;
@@ -28,20 +31,29 @@ type AdminToolsPanelProps = {
     }
   ) => Promise<boolean>;
   onUserDelete: (userId: string) => Promise<boolean>;
+  onWorkspaceCreate: (input: {
+    name: string;
+    slug: string;
+    rootPath: string;
+  }) => Promise<boolean>;
 };
 
 export function AdminToolsPanel({
   roles,
+  selectedWorkspace,
   selectedWorkspaceName,
   userMutationStatus,
   usersState,
+  workspaceMutationStatus,
+  workspacesState,
   onClose,
   onUserCreate,
   onUserUpdate,
-  onUserDelete
+  onUserDelete,
+  onWorkspaceCreate
 }: AdminToolsPanelProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [formState, setFormState] = useState({
+  const [userFormState, setUserFormState] = useState({
     name: "",
     username: "",
     email: "",
@@ -49,21 +61,26 @@ export function AdminToolsPanel({
     password: "",
     avatarUrl: ""
   });
+  const [workspaceFormState, setWorkspaceFormState] = useState({
+    name: "",
+    slug: "",
+    rootPath: ""
+  });
 
   useEffect(() => {
-    if (formState.roleId !== "" || roles.length === 0) {
+    if (userFormState.roleId !== "" || roles.length === 0) {
       return;
     }
 
-    setFormState((current) => ({
+    setUserFormState((current) => ({
       ...current,
       roleId: roles[1]?.id ?? roles[0]?.id ?? ""
     }));
-  }, [formState.roleId, roles]);
+  }, [userFormState.roleId, roles]);
 
-  function resetForm() {
+  function resetUserForm() {
     setEditingUserId(null);
-    setFormState({
+    setUserFormState({
       name: "",
       username: "",
       email: "",
@@ -75,7 +92,7 @@ export function AdminToolsPanel({
 
   function startEditing(user: User) {
     setEditingUserId(user.id);
-    setFormState({
+    setUserFormState({
       name: user.name,
       username: user.username,
       email: user.email,
@@ -85,14 +102,14 @@ export function AdminToolsPanel({
     });
   }
 
-  async function handleSubmit() {
+  async function handleUserSubmit() {
     const payload = {
-      name: formState.name.trim(),
-      username: formState.username.trim().toLowerCase(),
-      email: formState.email.trim().toLowerCase(),
-      roleId: formState.roleId,
-      password: formState.password.trim(),
-      avatarUrl: formState.avatarUrl.trim() || null
+      name: userFormState.name.trim(),
+      username: userFormState.username.trim().toLowerCase(),
+      email: userFormState.email.trim().toLowerCase(),
+      roleId: userFormState.roleId,
+      password: userFormState.password.trim(),
+      avatarUrl: userFormState.avatarUrl.trim() || null
     };
 
     const success = editingUserId
@@ -110,7 +127,27 @@ export function AdminToolsPanel({
       return;
     }
 
-    resetForm();
+    resetUserForm();
+  }
+
+  async function handleWorkspaceSubmit() {
+    const payload = {
+      name: workspaceFormState.name.trim(),
+      slug: workspaceFormState.slug.trim().toLowerCase(),
+      rootPath: workspaceFormState.rootPath.trim()
+    };
+
+    const success = await onWorkspaceCreate(payload);
+
+    if (!success) {
+      return;
+    }
+
+    setWorkspaceFormState({
+      name: "",
+      slug: "",
+      rootPath: ""
+    });
   }
 
   async function handleDelete(user: User) {
@@ -121,7 +158,7 @@ export function AdminToolsPanel({
     const deleted = await onUserDelete(user.id);
 
     if (deleted && editingUserId === user.id) {
-      resetForm();
+      resetUserForm();
     }
   }
 
@@ -142,7 +179,7 @@ export function AdminToolsPanel({
             <p className="canvas-eyebrow">{selectedWorkspaceName ?? "Workspace"}</p>
             <h1 className="canvas-title">Admin-Tools</h1>
             <p className="admin-tools-copy">
-              Verwalte Nutzer, Logins und Rollen zentral an einer Stelle.
+              Verwalte Nutzer, Workspaces und ihre echten Ursprungsordner.
             </p>
           </div>
           <button
@@ -158,6 +195,129 @@ export function AdminToolsPanel({
           <section className="addon-panel-card">
             <div className="user-panel-header">
               <div>
+                <h3>Workspace anlegen</h3>
+                <p className="sidebar-copy">
+                  Beim Anlegen wird der angegebene Ordner direkt als echter Ursprung
+                  erstellt.
+                </p>
+              </div>
+            </div>
+
+            <form
+              className="admin-user-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleWorkspaceSubmit();
+              }}
+            >
+              <input
+                className="field"
+                placeholder="Workspace-Name"
+                value={workspaceFormState.name}
+                onChange={(event) =>
+                  setWorkspaceFormState((current) => {
+                    const name = event.target.value;
+                    const nextSlug =
+                      current.slug === "" || current.slug === slugifyValue(current.name)
+                        ? slugifyValue(name)
+                        : current.slug;
+
+                    return {
+                      ...current,
+                      name,
+                      slug: nextSlug
+                    };
+                  })
+                }
+              />
+              <input
+                className="field"
+                placeholder="Slug"
+                value={workspaceFormState.slug}
+                onChange={(event) =>
+                  setWorkspaceFormState((current) => ({
+                    ...current,
+                    slug: slugifyValue(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="field"
+                placeholder="Pfad, z. B. /Users/joshua/Wissensbasis/Team-A"
+                value={workspaceFormState.rootPath}
+                onChange={(event) =>
+                  setWorkspaceFormState((current) => ({
+                    ...current,
+                    rootPath: event.target.value
+                  }))
+                }
+              />
+              <button
+                type="submit"
+                className="toolbar-primary-button"
+                disabled={
+                  workspaceMutationStatus.status === "saving" ||
+                  workspaceFormState.name.trim() === "" ||
+                  workspaceFormState.slug.trim() === "" ||
+                  workspaceFormState.rootPath.trim() === ""
+                }
+              >
+                {workspaceMutationStatus.status === "saving"
+                  ? "Lege Workspace an..."
+                  : "Workspace anlegen"}
+              </button>
+            </form>
+
+            {workspaceMutationStatus.status === "error" && (
+              <p className="feedback error">{workspaceMutationStatus.message}</p>
+            )}
+            {workspaceMutationStatus.status === "success" && (
+              <p className="feedback success">{workspaceMutationStatus.message}</p>
+            )}
+
+            {selectedWorkspace && (
+              <div className="workspace-admin-hint">
+                <strong>Aktuell:</strong> {selectedWorkspace.name}
+                <br />
+                <span>{selectedWorkspace.rootPath}</span>
+              </div>
+            )}
+          </section>
+
+          <section className="addon-panel-card">
+            <div className="user-panel-header">
+              <div>
+                <h3>Workspace-Verzeichnis</h3>
+                <p className="sidebar-copy">
+                  Jeder Workspace zeigt auf einen echten Ordner im Dateisystem.
+                </p>
+              </div>
+            </div>
+
+            {workspacesState.status === "loading" && (
+              <p className="sidebar-copy">Lade Workspaces...</p>
+            )}
+            {workspacesState.status === "error" && (
+              <p className="feedback error">{workspacesState.message}</p>
+            )}
+            {workspacesState.status === "success" && (
+              <div className="user-list">
+                {workspacesState.data.map((workspace) => (
+                  <article key={workspace.id} className="user-card">
+                    <div className="user-card-copy">
+                      <strong>{workspace.name}</strong>
+                      <span>{workspace.slug}</span>
+                      <span>{workspace.rootPath}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="addon-panel-card">
+            <div className="user-panel-header">
+              <div>
                 <h3>{editingUserId ? "Nutzer bearbeiten" : "Nutzer anlegen"}</h3>
                 <p className="sidebar-copy">
                   Login funktioniert mit Benutzername oder E-Mail plus Passwort.
@@ -167,7 +327,7 @@ export function AdminToolsPanel({
                 <button
                   type="button"
                   className="inline-link-button"
-                  onClick={resetForm}
+                  onClick={resetUserForm}
                 >
                   Neuer Nutzer
                 </button>
@@ -178,15 +338,15 @@ export function AdminToolsPanel({
               className="admin-user-form"
               onSubmit={(event) => {
                 event.preventDefault();
-                void handleSubmit();
+                void handleUserSubmit();
               }}
             >
               <input
                 className="field"
                 placeholder="Name"
-                value={formState.name}
+                value={userFormState.name}
                 onChange={(event) =>
-                  setFormState((current) => ({
+                  setUserFormState((current) => ({
                     ...current,
                     name: event.target.value
                   }))
@@ -195,9 +355,9 @@ export function AdminToolsPanel({
               <input
                 className="field"
                 placeholder="Benutzername"
-                value={formState.username}
+                value={userFormState.username}
                 onChange={(event) =>
-                  setFormState((current) => ({
+                  setUserFormState((current) => ({
                     ...current,
                     username: event.target.value
                   }))
@@ -206,9 +366,9 @@ export function AdminToolsPanel({
               <input
                 className="field"
                 placeholder="E-Mail"
-                value={formState.email}
+                value={userFormState.email}
                 onChange={(event) =>
-                  setFormState((current) => ({
+                  setUserFormState((current) => ({
                     ...current,
                     email: event.target.value
                   }))
@@ -218,9 +378,9 @@ export function AdminToolsPanel({
                 className="field"
                 placeholder={editingUserId ? "Neues Passwort (optional)" : "Passwort"}
                 type="password"
-                value={formState.password}
+                value={userFormState.password}
                 onChange={(event) =>
-                  setFormState((current) => ({
+                  setUserFormState((current) => ({
                     ...current,
                     password: event.target.value
                   }))
@@ -229,9 +389,9 @@ export function AdminToolsPanel({
               <input
                 className="field"
                 placeholder="Bild-URL"
-                value={formState.avatarUrl}
+                value={userFormState.avatarUrl}
                 onChange={(event) =>
-                  setFormState((current) => ({
+                  setUserFormState((current) => ({
                     ...current,
                     avatarUrl: event.target.value
                   }))
@@ -239,9 +399,9 @@ export function AdminToolsPanel({
               />
               <select
                 className="field"
-                value={formState.roleId}
+                value={userFormState.roleId}
                 onChange={(event) =>
-                  setFormState((current) => ({
+                  setUserFormState((current) => ({
                     ...current,
                     roleId: event.target.value
                   }))
@@ -258,11 +418,11 @@ export function AdminToolsPanel({
                 className="toolbar-primary-button"
                 disabled={
                   userMutationStatus.status === "saving" ||
-                  formState.name.trim() === "" ||
-                  formState.username.trim() === "" ||
-                  formState.email.trim() === "" ||
-                  formState.roleId.trim() === "" ||
-                  (!editingUserId && formState.password.trim() === "")
+                  userFormState.name.trim() === "" ||
+                  userFormState.username.trim() === "" ||
+                  userFormState.email.trim() === "" ||
+                  userFormState.roleId.trim() === "" ||
+                  (!editingUserId && userFormState.password.trim() === "")
                 }
               >
                 {userMutationStatus.status === "saving"
@@ -356,4 +516,14 @@ export function AdminToolsPanel({
       </div>
     </section>
   );
+}
+
+function slugifyValue(value: string) {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug;
 }

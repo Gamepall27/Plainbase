@@ -7,6 +7,7 @@ const schemaStatements = [
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
+      root_path TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -33,6 +34,9 @@ const schemaStatements = [
       id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL,
       parent_id TEXT,
+      kind TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder')),
+      sort_order INTEGER NOT NULL DEFAULT -1,
+      file_path TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL,
       slug TEXT NOT NULL,
       content TEXT NOT NULL,
@@ -109,6 +113,30 @@ export function applySchema(database: DatabaseSync) {
   ensureColumn(database, "users", "username", "TEXT");
   ensureColumn(database, "users", "password_hash", "TEXT");
   ensureColumn(database, "users", "avatar_url", "TEXT");
+  ensureColumn(
+    database,
+    "workspaces",
+    "root_path",
+    "TEXT NOT NULL DEFAULT ''"
+  );
+  ensureColumn(
+    database,
+    "documents",
+    "kind",
+    "TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder'))"
+  );
+  ensureColumn(
+    database,
+    "documents",
+    "sort_order",
+    "INTEGER NOT NULL DEFAULT -1"
+  );
+  ensureColumn(
+    database,
+    "documents",
+    "file_path",
+    "TEXT NOT NULL DEFAULT ''"
+  );
   database.exec(`
     UPDATE users
     SET username = LOWER(SUBSTR(email, 1, INSTR(email, '@') - 1))
@@ -122,6 +150,41 @@ export function applySchema(database: DatabaseSync) {
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx
     ON users (username)
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS workspaces_root_path_idx
+    ON workspaces (root_path)
+  `);
+  database.exec(`
+    UPDATE documents
+    SET kind = 'document'
+    WHERE kind IS NULL OR TRIM(kind) = ''
+  `);
+  database.exec(`
+    WITH ordered_documents AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY workspace_id, COALESCE(parent_id, '__root__')
+          ORDER BY created_at, title, id
+        ) - 1 AS next_sort_order
+      FROM documents
+    )
+    UPDATE documents
+    SET sort_order = (
+      SELECT next_sort_order
+      FROM ordered_documents
+      WHERE ordered_documents.id = documents.id
+    )
+    WHERE sort_order < 0
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS documents_parent_sort_order_idx
+    ON documents (workspace_id, parent_id, sort_order)
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS documents_workspace_file_path_idx
+    ON documents (workspace_id, file_path)
   `);
 }
 

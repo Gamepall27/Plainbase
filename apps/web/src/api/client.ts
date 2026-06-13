@@ -3,8 +3,10 @@ import type {
   AddonResponse,
   AddonsResponse,
   ApiErrorResponse,
+  CreateWorkspaceRequest,
   CreateUserRequest,
   CreateDocumentRequest,
+  DeleteDocumentResponse,
   DeleteUserResponse,
   DemoUserResponse,
   DocumentResponse,
@@ -19,6 +21,7 @@ import type {
   UsersResponse,
   TicketsResponse,
   UpdateDocumentRequest,
+  WorkspaceResponse,
   WorkspacesResponse
 } from "@plainbase/shared";
 
@@ -52,6 +55,12 @@ export const apiClient = {
     request<WorkspacesResponse>("/api/workspaces").then(
       (response) => response.data.workspaces
     ),
+  createWorkspace: (payload: CreateWorkspaceRequest) =>
+    request<WorkspaceResponse>("/api/workspaces", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data.workspace),
   getDocuments: (workspaceId: string) =>
     request<DocumentsResponse>(`/api/workspaces/${workspaceId}/documents`).then(
       (response) => response.data.documents
@@ -72,6 +81,10 @@ export const apiClient = {
       headers: jsonHeaders,
       body: JSON.stringify(payload)
     }).then((response) => response.data.document),
+  deleteDocument: (documentId: string) =>
+    request<DeleteDocumentResponse>(`/api/documents/${documentId}`, {
+      method: "DELETE"
+    }).then((response) => response.data.deletedDocumentId),
   getAddons: () =>
     request<AddonsResponse>("/api/addons").then((response) => response.data.addons),
   toggleAddon: (addonId: string) =>

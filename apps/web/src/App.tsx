@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { DocumentKind } from "@plainbase/shared";
 import type { SidebarPanelContext } from "@plainbase/addon-sdk";
 import type { RightPanelTab, TicketFilter } from "./app/types";
 import { AdminToolsPanel } from "./components/admin/AdminToolsPanel";
@@ -37,7 +38,11 @@ export function App() {
   const currentTabTitle =
     state.draft?.title.trim() || data.selectedDocument?.title || "Neues Objekt";
   const linkedDocuments = data.documents
-    .filter((document) => document.id !== state.selectedDocumentId)
+    .filter(
+      (document) =>
+        document.kind === "document" &&
+        document.id !== state.selectedDocumentId
+    )
     .slice(0, 3);
   const addonPanelContext: SidebarPanelContext = {
     activeAddonIds: data.activeAddonIds,
@@ -47,13 +52,13 @@ export function App() {
     workspaceId: state.selectedWorkspaceId
   };
 
-  function handleNewDocument() {
+  async function handleCreateEntry(kind: DocumentKind) {
     setIsAdminToolsOpen(false);
-    void actions.createDocument().then((created) => {
-      if (created) {
-        setShowSourceEditor(true);
-      }
-    });
+    const created = await actions.createEntry(kind);
+
+    if (created?.kind === "document") {
+      setShowSourceEditor(true);
+    }
   }
 
   function handleOpenAdminTools() {
@@ -82,6 +87,8 @@ export function App() {
           documentFolders={documentFolders}
           leftSidebarPanels={data.leftSidebarPanels}
           mayCreateDocument={permissions.mayCreateDocument}
+          mayDeleteDocument={permissions.mayDeleteDocument}
+          mayEditDocument={permissions.mayEditDocument}
           mayManageAddons={permissions.mayManageAddons}
           pendingAddonId={state.pendingAddonId}
           selectedDocumentId={state.selectedDocumentId}
@@ -89,8 +96,17 @@ export function App() {
           tickets={data.tickets}
           workspacesState={state.workspacesState}
           onAddonToggle={(addonId) => void actions.toggleAddon(addonId)}
+          onDocumentDelete={(documentId) =>
+            actions.deleteDocumentInTree(documentId)
+          }
+          onDocumentMove={(documentId, targetDocumentId, placement) =>
+            void actions.moveDocumentInTree(documentId, targetDocumentId, placement)
+          }
+          onDocumentRename={(documentId, title) =>
+            actions.renameDocumentInTree(documentId, title)
+          }
           onDocumentSelect={actions.setSelectedDocumentId}
-          onNewDocument={handleNewDocument}
+          onCreateEntry={(kind) => void handleCreateEntry(kind)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onWorkspaceSelect={actions.setSelectedWorkspaceId}
         />
@@ -98,13 +114,17 @@ export function App() {
         {isAdminToolsOpen ? (
           <AdminToolsPanel
             roles={data.roles}
+            selectedWorkspace={data.selectedWorkspace}
             selectedWorkspaceName={data.selectedWorkspace?.name ?? null}
             userMutationStatus={state.userMutationStatus}
             usersState={state.usersState}
+            workspaceMutationStatus={state.workspaceMutationStatus}
+            workspacesState={state.workspacesState}
             onClose={() => setIsAdminToolsOpen(false)}
             onUserCreate={actions.createUser}
             onUserUpdate={actions.updateUser}
             onUserDelete={actions.deleteUser}
+            onWorkspaceCreate={actions.createWorkspace}
           />
         ) : (
           <DocumentWorkspace
@@ -124,8 +144,8 @@ export function App() {
             showSourceEditor={showSourceEditor}
             usersState={state.usersState}
             mayManageUsers={permissions.mayManageUsers}
+            onCreateEntry={(kind) => void handleCreateEntry(kind)}
             onDraftChange={actions.updateDraft}
-            onNewDocument={handleNewDocument}
             onOpenAdminTools={handleOpenAdminTools}
             onSaveDocument={() => void actions.saveDocument()}
             onShowSourceEditorChange={setShowSourceEditor}

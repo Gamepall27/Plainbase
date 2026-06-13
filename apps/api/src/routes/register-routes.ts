@@ -19,7 +19,10 @@ type ApiDependencies = {
 };
 
 export function registerRoutes(app: Express, dependencies: ApiDependencies) {
-  const services = createServices(dependencies.database);
+  const services = createServices(
+    dependencies.database,
+    dependencies.contentStore.getRootPath()
+  );
 
   app.use("/api", attachDemoAuth(services.demoAuthService));
   app.use(

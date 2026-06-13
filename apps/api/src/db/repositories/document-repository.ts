@@ -12,6 +12,9 @@ export class DocumentRepository {
             id,
             workspace_id AS workspaceId,
             parent_id AS parentId,
+            kind,
+            sort_order AS sortOrder,
+            file_path AS filePath,
             title,
             slug,
             content,
@@ -21,7 +24,7 @@ export class DocumentRepository {
             updated_by_user_id AS updatedByUserId
           FROM documents
           WHERE workspace_id = ?
-          ORDER BY created_at, title
+          ORDER BY sort_order, created_at, title
         `
       )
       .all(workspaceId) as Document[];
@@ -35,6 +38,9 @@ export class DocumentRepository {
             id,
             workspace_id AS workspaceId,
             parent_id AS parentId,
+            kind,
+            sort_order AS sortOrder,
+            file_path AS filePath,
             title,
             slug,
             content,
@@ -43,7 +49,7 @@ export class DocumentRepository {
             created_by_user_id AS createdByUserId,
             updated_by_user_id AS updatedByUserId
           FROM documents
-          ORDER BY created_at, title
+          ORDER BY sort_order, created_at, title
         `
       )
       .all() as Document[];
@@ -57,6 +63,9 @@ export class DocumentRepository {
             id,
             workspace_id AS workspaceId,
             parent_id AS parentId,
+            kind,
+            sort_order AS sortOrder,
+            file_path AS filePath,
             title,
             slug,
             content,
@@ -81,6 +90,9 @@ export class DocumentRepository {
             id,
             workspace_id AS workspaceId,
             parent_id AS parentId,
+            kind,
+            sort_order AS sortOrder,
+            file_path AS filePath,
             title,
             slug,
             content,
@@ -97,6 +109,33 @@ export class DocumentRepository {
     return row ?? null;
   }
 
+  findByFilePathInWorkspace(workspaceId: string, filePath: string) {
+    const row = this.database
+      .prepare(
+        `
+          SELECT
+            id,
+            workspace_id AS workspaceId,
+            parent_id AS parentId,
+            kind,
+            sort_order AS sortOrder,
+            file_path AS filePath,
+            title,
+            slug,
+            content,
+            created_at AS createdAt,
+            updated_at AS updatedAt,
+            created_by_user_id AS createdByUserId,
+            updated_by_user_id AS updatedByUserId
+          FROM documents
+          WHERE workspace_id = ? AND file_path = ?
+        `
+      )
+      .get(workspaceId, filePath) as Document | undefined;
+
+    return row ?? null;
+  }
+
   create(document: Document) {
     this.database
       .prepare(
@@ -105,6 +144,9 @@ export class DocumentRepository {
             id,
             workspace_id,
             parent_id,
+            kind,
+            sort_order,
+            file_path,
             title,
             slug,
             content,
@@ -113,13 +155,16 @@ export class DocumentRepository {
             created_by_user_id,
             updated_by_user_id
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
       )
       .run(
         document.id,
         document.workspaceId,
         document.parentId,
+        document.kind,
+        document.sortOrder,
+        document.filePath ?? "",
         document.title,
         document.slug,
         document.content,
@@ -139,6 +184,9 @@ export class DocumentRepository {
           UPDATE documents
           SET
             parent_id = ?,
+            kind = ?,
+            sort_order = ?,
+            file_path = ?,
             title = ?,
             slug = ?,
             content = ?,
@@ -149,6 +197,9 @@ export class DocumentRepository {
       )
       .run(
         document.parentId,
+        document.kind,
+        document.sortOrder,
+        document.filePath ?? "",
         document.title,
         document.slug,
         document.content,
@@ -158,6 +209,26 @@ export class DocumentRepository {
       );
 
     return document;
+  }
+
+  getNextSortOrder(workspaceId: string, parentId: string | null) {
+    const row = this.database
+      .prepare(
+        `
+          SELECT COALESCE(MAX(sort_order), -1) + 1 AS nextSortOrder
+          FROM documents
+          WHERE workspace_id = ?
+            AND (
+              (parent_id IS NULL AND ? IS NULL)
+              OR parent_id = ?
+            )
+        `
+      )
+      .get(workspaceId, parentId, parentId) as
+      | { nextSortOrder: number }
+      | undefined;
+
+    return row?.nextSortOrder ?? 0;
   }
 
   delete(id: string) {

@@ -12,6 +12,7 @@ export class WorkspaceRepository {
             id,
             name,
             slug,
+            root_path AS rootPath,
             created_at AS createdAt,
             updated_at AS updatedAt
           FROM workspaces
@@ -29,6 +30,7 @@ export class WorkspaceRepository {
             id,
             name,
             slug,
+            root_path AS rootPath,
             created_at AS createdAt,
             updated_at AS updatedAt
           FROM workspaces
@@ -48,6 +50,7 @@ export class WorkspaceRepository {
             id,
             name,
             slug,
+            root_path AS rootPath,
             created_at AS createdAt,
             updated_at AS updatedAt
           FROM workspaces
@@ -59,18 +62,39 @@ export class WorkspaceRepository {
     return row ?? null;
   }
 
+  findByRootPath(rootPath: string) {
+    const row = this.database
+      .prepare(
+        `
+          SELECT
+            id,
+            name,
+            slug,
+            root_path AS rootPath,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM workspaces
+          WHERE root_path = ?
+        `
+      )
+      .get(rootPath) as Workspace | undefined;
+
+    return row ?? null;
+  }
+
   create(workspace: Workspace) {
     this.database
       .prepare(
         `
-          INSERT INTO workspaces (id, name, slug, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO workspaces (id, name, slug, root_path, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
         `
       )
       .run(
         workspace.id,
         workspace.name,
         workspace.slug,
+        workspace.rootPath,
         workspace.createdAt,
         workspace.updatedAt
       );

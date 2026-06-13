@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
+import type { DocumentKind } from "@plainbase/shared";
 import type { SidebarPanelContext, SidebarPanelExtension } from "@plainbase/addon-sdk";
 import type { Addon, Document, Ticket, Workspace } from "@plainbase/shared";
 import type { ReactNode } from "react";
 import type { LoadState, SidebarFolder } from "../../app/types";
 import { quickLinks } from "../../lib/sidebar-model";
+import { CreateObjectMenuButton } from "../layout/CreateObjectMenuButton";
 import { SidebarTreeItem } from "./SidebarTreeItem";
 
 type LeftSidebarProps = {
@@ -12,6 +15,8 @@ type LeftSidebarProps = {
   documentFolders: SidebarFolder[];
   leftSidebarPanels: SidebarPanelExtension<ReactNode>[];
   mayCreateDocument: boolean;
+  mayDeleteDocument: boolean;
+  mayEditDocument: boolean;
   mayManageAddons: boolean;
   pendingAddonId: string | null;
   selectedDocumentId: string | null;
@@ -19,8 +24,15 @@ type LeftSidebarProps = {
   tickets: Ticket[];
   workspacesState: LoadState<Workspace[]>;
   onAddonToggle: (addonId: string) => void;
+  onDocumentMove: (
+    documentId: string,
+    targetDocumentId: string,
+    placement: "before" | "inside" | "after"
+  ) => void;
+  onDocumentDelete: (documentId: string) => Promise<boolean>;
+  onDocumentRename: (documentId: string, title: string) => Promise<boolean>;
   onDocumentSelect: (documentId: string) => void;
-  onNewDocument: () => void;
+  onCreateEntry: (kind: DocumentKind) => void;
   onOpenSettings: () => void;
   onWorkspaceSelect: (workspaceId: string) => void;
 };
@@ -32,6 +44,8 @@ export function LeftSidebar({
   documentFolders,
   leftSidebarPanels,
   mayCreateDocument,
+  mayDeleteDocument,
+  mayEditDocument,
   mayManageAddons,
   pendingAddonId,
   selectedDocumentId,
@@ -39,11 +53,117 @@ export function LeftSidebar({
   tickets,
   workspacesState,
   onAddonToggle,
+  onDocumentDelete,
+  onDocumentMove,
+  onDocumentRename,
   onDocumentSelect,
-  onNewDocument,
+  onCreateEntry,
   onOpenSettings,
   onWorkspaceSelect
 }: LeftSidebarProps) {
+  const [draggedDocumentId, setDraggedDocumentId] = useState<string | null>(null);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<string[]>([]);
+  const [contextMenu, setContextMenu] = useState<{
+    item: SidebarFolder["items"][number];
+    x: number;
+    y: number;
+  } | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const [isWorkspaceDocumentsCollapsed, setIsWorkspaceDocumentsCollapsed] =
+    useState(false);
+
+  useEffect(() => {
+    const storageKey = `plainbase-collapsed-folders:${selectedWorkspaceId ?? "default"}`;
+    const storedValue = window.localStorage.getItem(storageKey);
+
+    if (!storedValue) {
+      setCollapsedFolderIds([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(storedValue) as string[];
+      setCollapsedFolderIds(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setCollapsedFolderIds([]);
+    }
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    const storageKey = `plainbase-collapsed-folders:${selectedWorkspaceId ?? "default"}`;
+    window.localStorage.setItem(storageKey, JSON.stringify(collapsedFolderIds));
+  }, [collapsedFolderIds, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    function handlePointerDown() {
+      setContextMenu(null);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    setContextMenu(null);
+    setEditingItemId(null);
+  }, [selectedWorkspaceId]);
+
+  function toggleFolder(folderId: string) {
+    setCollapsedFolderIds((current) =>
+      current.includes(folderId)
+        ? current.filter((item) => item !== folderId)
+        : [...current, folderId]
+    );
+  }
+
+  async function handleDeleteCurrentItem() {
+    if (!contextMenu?.item.documentId) {
+      return;
+    }
+
+    const deleted = await onDocumentDelete(contextMenu.item.documentId);
+
+    if (deleted) {
+      setContextMenu(null);
+    }
+  }
+
+  function handleStartRename(item: SidebarFolder["items"][number]) {
+    setContextMenu(null);
+    setEditingItemId(item.id);
+    setEditingTitle(item.title);
+  }
+
+  async function handleRenameCommit(item: SidebarFolder["items"][number]) {
+    if (!item.documentId) {
+      setEditingItemId(null);
+      return;
+    }
+
+    const renamed = await onDocumentRename(item.documentId, editingTitle);
+
+    if (renamed) {
+      setEditingItemId(null);
+      setEditingTitle("");
+    }
+  }
+
   return (
     <aside className="left-sidebar">
       <section className="left-panel-card">
@@ -81,13 +201,13 @@ export function LeftSidebar({
       <section className="left-panel-card">
         <div className="section-heading-row">
           <p className="rail-heading">Objekte</p>
-          <button
-            type="button"
+          <CreateObjectMenuButton
+            ariaLabel="Neues Objekt anlegen"
             className="tree-action-button"
-            onClick={onNewDocument}
-          >
-            +
-          </button>
+            disabled={!mayCreateDocument}
+            label="+"
+            onSelect={onCreateEntry}
+          />
         </div>
 
         {documentsState.status === "loading" && <p>Lade Dokumente...</p>}
@@ -103,20 +223,47 @@ export function LeftSidebar({
             )}
             {documentFolders.map((folder) => (
               <div key={folder.id} className="tree-folder">
-                <div className="tree-folder-label">
-                  <span className="tree-chevron">v</span>
+                <button
+                  type="button"
+                  className="tree-folder-label tree-folder-label-button"
+                  onClick={() =>
+                    setIsWorkspaceDocumentsCollapsed((current) => !current)
+                  }
+                >
+                  <span className="tree-chevron">
+                    {isWorkspaceDocumentsCollapsed ? ">" : "v"}
+                  </span>
                   <span>{folder.title}</span>
-                </div>
-                <div className="tree-folder-content">
-                  {folder.items.map((item) => (
-                    <SidebarTreeItem
-                      key={item.id}
-                      item={item}
-                      selectedDocumentId={selectedDocumentId}
-                      onSelect={onDocumentSelect}
-                    />
-                  ))}
-                </div>
+                </button>
+                {!isWorkspaceDocumentsCollapsed && (
+                  <div className="tree-folder-content">
+                    {folder.items.map((item) => (
+                      <SidebarTreeItem
+                        key={item.id}
+                        collapsedFolderIds={collapsedFolderIds}
+                        draggedDocumentId={draggedDocumentId}
+                        editingItemId={editingItemId}
+                        editingTitle={editingTitle}
+                        item={item}
+                        selectedDocumentId={selectedDocumentId}
+                        onDocumentMove={onDocumentMove}
+                        onContextMenu={(contextItem, x, y) =>
+                          setContextMenu({ item: contextItem, x, y })
+                        }
+                        onDragEnd={() => setDraggedDocumentId(null)}
+                        onDragStart={setDraggedDocumentId}
+                        onEditingTitleChange={setEditingTitle}
+                        onFolderToggle={toggleFolder}
+                        onRenameCancel={() => {
+                          setEditingItemId(null);
+                          setEditingTitle("");
+                        }}
+                        onRenameCommit={handleRenameCommit}
+                        onSelect={onDocumentSelect}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -155,6 +302,33 @@ export function LeftSidebar({
       <button type="button" className="settings-button" onClick={onOpenSettings}>
         Einstellungen
       </button>
+
+      {contextMenu && (
+        <div
+          className="tree-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {mayEditDocument && (
+            <button
+              type="button"
+              className="tree-context-menu-button"
+              onClick={() => handleStartRename(contextMenu.item)}
+            >
+              Umbenennen
+            </button>
+          )}
+          {mayDeleteDocument && (
+            <button
+              type="button"
+              className="tree-context-menu-button tree-context-menu-button-danger"
+              onClick={() => void handleDeleteCurrentItem()}
+            >
+              Loeschen
+            </button>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

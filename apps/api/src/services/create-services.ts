@@ -17,7 +17,10 @@ import { WorkspaceService } from "./workspace-service.js";
 
 export type ApiServices = ReturnType<typeof createServices>;
 
-export function createServices(database: PlainbaseDatabase) {
+export function createServices(
+  database: PlainbaseDatabase,
+  contentRoot: string
+) {
   const connection = database.getConnection();
 
   const workspaceRepository = new WorkspaceRepository(connection);
@@ -29,8 +32,12 @@ export function createServices(database: PlainbaseDatabase) {
   const appStateRepository = new AppStateRepository(connection);
 
   return {
-    workspaceService: new WorkspaceService(workspaceRepository),
-    documentService: new DocumentService(documentRepository, workspaceRepository),
+    workspaceService: new WorkspaceService(workspaceRepository, contentRoot),
+    documentService: new DocumentService(
+      documentRepository,
+      workspaceRepository,
+      contentRoot
+    ),
     userService: new UserService(
       userRepository,
       roleRepository,

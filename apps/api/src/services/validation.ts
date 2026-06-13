@@ -113,6 +113,26 @@ export function readOptionalNullableString(
   return value.trim();
 }
 
+export function readOptionalInteger(
+  input: Record<string, unknown>,
+  field: string,
+  label = field
+) {
+  if (!(field in input)) {
+    return undefined;
+  }
+
+  const value = input[field];
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Validation failed.", {
+      [field]: `${label} must be a non-negative integer.`
+    });
+  }
+
+  return value;
+}
+
 export function readRequiredRoleName(
   input: Record<string, unknown>,
   field: string

@@ -3,6 +3,7 @@ import type {
   Addon,
   DemoAuth,
   Document,
+  DocumentKind,
   Role,
   RoleName,
   Ticket,
@@ -12,6 +13,7 @@ import type {
 import {
   canCreateDocument,
   canCreateTicket,
+  canDeleteDocument,
   canEditDocument,
   canManageAddons,
   canManageUsers
@@ -72,6 +74,9 @@ export function useWorkspaceApp() {
   const [userMutationStatus, setUserMutationStatus] = useState<SaveState>({
     status: "idle"
   });
+  const [workspaceMutationStatus, setWorkspaceMutationStatus] = useState<SaveState>({
+    status: "idle"
+  });
   const [pendingAddonId, setPendingAddonId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -104,6 +109,20 @@ export function useWorkspaceApp() {
     }
 
     void loadWorkspaceData(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+    }, 4000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
@@ -180,9 +199,16 @@ export function useWorkspaceApp() {
     }
   }
 
-  async function loadWorkspaceData(workspaceId: string) {
-    setDocumentsState({ status: "loading" });
-    setTicketsState({ status: "loading" });
+  async function loadWorkspaceData(
+    workspaceId: string,
+    options?: {
+      silent?: boolean;
+    }
+  ) {
+    if (!options?.silent) {
+      setDocumentsState({ status: "loading" });
+      setTicketsState({ status: "loading" });
+    }
 
     const [documentsResult, ticketsResult] = await Promise.allSettled([
       apiClient.getDocuments(workspaceId),
@@ -194,18 +220,30 @@ export function useWorkspaceApp() {
       setDocumentsState({ status: "success", data: documents });
 
       setSelectedDocumentId((currentDocumentId) => {
+        const selectedDocument =
+          currentDocumentId
+            ? documents.find((item) => item.id === currentDocumentId)
+            : null;
+
         if (
           currentDocumentId &&
-          documents.some((item) => item.id === currentDocumentId)
+          selectedDocument &&
+          selectedDocument.kind === "document"
         ) {
           return currentDocumentId;
         }
 
-        const nextDocumentId = documents[0]?.id ?? null;
+        const nextDocumentId =
+          documents.find((item) => item.kind === "document")?.id ?? null;
 
         if (!nextDocumentId) {
-          setDraft(createEmptyDraft(workspaceId));
+          if (documents.length === 0) {
+            setDraft(createEmptyDraft(workspaceId));
+          } else {
+            setDraft(null);
+          }
           setHasUnsavedChanges(false);
+          setDocumentState(null);
         }
 
         return nextDocumentId;
@@ -309,9 +347,9 @@ export function useWorkspaceApp() {
     }
   }
 
-  async function createDocument() {
+  async function createEntry(kind: DocumentKind) {
     if (!selectedWorkspaceId) {
-      return false;
+      return null;
     }
 
     setSaveState({ status: "saving" });
@@ -319,24 +357,117 @@ export function useWorkspaceApp() {
     try {
       const existingDocuments =
         documentsState.status === "success" ? documentsState.data : [];
-      const { title, slug } = createUniqueDocumentIdentity(existingDocuments);
+      const selectedDocument =
+        selectedDocumentId
+          ? existingDocuments.find((document) => document.id === selectedDocumentId) ??
+            null
+          : null;
+      const parentId = selectedDocument?.parentId ?? null;
+      const siblingDocuments = getSiblingDocuments(existingDocuments, parentId);
+      const { title, slug } = createUniqueDocumentIdentity(existingDocuments, kind);
       const createdDocument = await apiClient.createDocument({
         workspaceId: selectedWorkspaceId,
-        parentId: null,
+        parentId,
+        kind,
+        sortOrder: siblingDocuments.length,
         title,
         slug,
-        content: "# Neues Dokument\n"
+        content: kind === "folder" ? "" : "# Neues Dokument\n"
       });
 
-      setSelectedDocumentId(createdDocument.id);
-      setDocumentState({ status: "success", data: createdDocument });
-      setDraft(mapDocumentToDraft(createdDocument));
-      setHasUnsavedChanges(false);
+      if (createdDocument.kind === "document") {
+        setSelectedDocumentId(createdDocument.id);
+        setDocumentState({ status: "success", data: createdDocument });
+        setDraft(mapDocumentToDraft(createdDocument));
+        setHasUnsavedChanges(false);
+      }
       setSaveState({
         status: "success",
-        message: `"${createdDocument.title}" wurde angelegt.`
+        message:
+          createdDocument.kind === "folder"
+            ? `Ordner "${createdDocument.title}" wurde angelegt.`
+            : `"${createdDocument.title}" wurde angelegt.`
       });
 
+      await loadWorkspaceData(selectedWorkspaceId);
+      return createdDocument;
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return null;
+    }
+  }
+
+  async function moveDocumentInTree(
+    documentId: string,
+    targetDocumentId: string,
+    placement: "before" | "inside" | "after"
+  ) {
+    if (!selectedWorkspaceId || documentsState.status !== "success") {
+      return false;
+    }
+
+    if (documentId === targetDocumentId) {
+      return false;
+    }
+
+    setSaveState({ status: "saving" });
+
+    try {
+      const documents = documentsState.data;
+      const draggedDocument =
+        documents.find((document) => document.id === documentId) ?? null;
+      const targetDocument =
+        documents.find((document) => document.id === targetDocumentId) ?? null;
+
+      if (!draggedDocument || !targetDocument) {
+        return false;
+      }
+
+      if (placement === "inside" && targetDocument.kind === "document") {
+        await groupDocumentsIntoFolder(
+          selectedWorkspaceId,
+          documents,
+          draggedDocument,
+          targetDocument
+        );
+      } else {
+        const nextParentId =
+          placement === "inside" ? targetDocument.id : targetDocument.parentId;
+        const destinationItems = getSiblingDocuments(documents, nextParentId)
+          .filter((item) => item.id !== draggedDocument.id);
+        const targetIndex =
+          placement === "inside"
+            ? destinationItems.length
+            : destinationItems.findIndex((item) => item.id === targetDocument.id);
+        const insertIndex =
+          placement === "before"
+            ? targetIndex
+            : placement === "after"
+              ? targetIndex + 1
+              : destinationItems.length;
+        const reorderedItems = [
+          ...destinationItems.slice(0, insertIndex),
+          draggedDocument,
+          ...destinationItems.slice(insertIndex)
+        ];
+
+        await Promise.all(
+          reorderedItems.map((item, index) =>
+            apiClient.updateDocument(item.id, {
+              parentId: nextParentId,
+              sortOrder: index
+            })
+          )
+        );
+      }
+
+      setSaveState({
+        status: "success",
+        message: `"${draggedDocument.title}" wurde verschoben.`
+      });
       await loadWorkspaceData(selectedWorkspaceId);
       return true;
     } catch (error) {
@@ -363,6 +494,7 @@ export function useWorkspaceApp() {
         ? await apiClient.createDocument({
             workspaceId: selectedWorkspaceId,
             parentId: draft.parentId,
+            kind: draft.kind,
             title,
             slug,
             content: draft.content
@@ -410,6 +542,108 @@ export function useWorkspaceApp() {
     });
     setHasUnsavedChanges(true);
     setSaveState({ status: "idle" });
+  }
+
+  async function renameDocumentInTree(documentId: string, title: string) {
+    if (!selectedWorkspaceId || documentsState.status !== "success") {
+      return false;
+    }
+
+    const nextTitle = title.trim();
+
+    if (nextTitle === "") {
+      return false;
+    }
+
+    setSaveState({ status: "saving" });
+
+    try {
+      const documents = documentsState.data;
+      const currentDocument =
+        documents.find((document) => document.id === documentId) ?? null;
+
+      if (!currentDocument) {
+        return false;
+      }
+
+      const nextSlug = createUniqueSlugForTitle(documents, nextTitle, documentId);
+      const selectedDraft = draft?.id === documentId ? draft : null;
+      const updatePayload = {
+        title: nextTitle,
+        slug: nextSlug
+      } as {
+        title: string;
+        slug: string;
+        content?: string;
+      };
+
+      if (selectedDraft) {
+        updatePayload.content = selectedDraft.content;
+      }
+
+      const updatedDocument = await apiClient.updateDocument(documentId, updatePayload);
+
+      if (selectedDraft?.id === documentId) {
+        setDocumentState({ status: "success", data: updatedDocument });
+        setDraft(mapDocumentToDraft(updatedDocument));
+        setHasUnsavedChanges(false);
+      }
+
+      setSaveState({
+        status: "success",
+        message: `"${updatedDocument.title}" wurde umbenannt.`
+      });
+      await loadWorkspaceData(selectedWorkspaceId);
+      return true;
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function deleteDocumentInTree(documentId: string) {
+    if (!selectedWorkspaceId || documentsState.status !== "success") {
+      return false;
+    }
+
+    setSaveState({ status: "saving" });
+
+    try {
+      const currentDocument =
+        documentsState.data.find((document) => document.id === documentId) ?? null;
+
+      if (!currentDocument) {
+        return false;
+      }
+
+      await apiClient.deleteDocument(documentId);
+
+      if (selectedDocumentId === documentId) {
+        setSelectedDocumentId(null);
+        setDocumentState(null);
+        setDraft(null);
+        setHasUnsavedChanges(false);
+      }
+
+      setSaveState({
+        status: "success",
+        message:
+          currentDocument.kind === "folder"
+            ? `Ordner "${currentDocument.title}" wurde geloescht.`
+            : `"${currentDocument.title}" wurde geloescht.`
+      });
+      await loadWorkspaceData(selectedWorkspaceId);
+      return true;
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
   }
 
   async function toggleAddon(addonId: string) {
@@ -560,6 +794,46 @@ export function useWorkspaceApp() {
     }
   }
 
+  async function createWorkspace(input: {
+    name: string;
+    slug: string;
+    rootPath: string;
+  }) {
+    setWorkspaceMutationStatus({ status: "saving" });
+
+    try {
+      const createdWorkspace = await apiClient.createWorkspace(input);
+
+      setWorkspacesState((current) => {
+        if (current.status !== "success") {
+          return {
+            status: "success",
+            data: [createdWorkspace]
+          };
+        }
+
+        return {
+          status: "success",
+          data: [...current.data, createdWorkspace].sort((left, right) =>
+            left.name.localeCompare(right.name)
+          )
+        };
+      });
+      setSelectedWorkspaceId(createdWorkspace.id);
+      setWorkspaceMutationStatus({
+        status: "success",
+        message: `Workspace "${createdWorkspace.name}" wurde angelegt.`
+      });
+      return true;
+    } catch (error) {
+      setWorkspaceMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
   const activeRole =
     demoUserState.status === "success" ? demoUserState.data.role?.name ?? null : null;
   const workspaces =
@@ -593,6 +867,7 @@ export function useWorkspaceApp() {
       saveState,
       roleSwitchStatus,
       userMutationStatus,
+      workspaceMutationStatus,
       pendingAddonId
     },
     data: {
@@ -614,6 +889,7 @@ export function useWorkspaceApp() {
     permissions: {
       mayCreateDocument: canCreateDocument(activeRole),
       mayEditDocument: canEditDocument(activeRole),
+      mayDeleteDocument: canDeleteDocument(activeRole),
       mayManageAddons: canManageAddons(activeRole),
       mayCreateTicket: canCreateTicket(activeRole),
       mayManageUsers: canManageUsers(activeRole)
@@ -624,19 +900,26 @@ export function useWorkspaceApp() {
       signIn,
       changeRole,
       signOut,
-      createDocument,
+      createEntry,
+      renameDocumentInTree,
+      deleteDocumentInTree,
+      moveDocumentInTree,
       saveDocument,
       updateDraft,
       toggleAddon,
       createUser,
       updateUser,
-      deleteUser
+      deleteUser,
+      createWorkspace
     }
   };
 }
 
-function createUniqueDocumentIdentity(documents: Document[]) {
-  const baseTitle = "Untitled document";
+function createUniqueDocumentIdentity(
+  documents: Document[],
+  kind: DocumentKind,
+  baseTitle = kind === "folder" ? "Neuer Ordner" : "Untitled document"
+) {
   const baseSlug = slugify(baseTitle);
   const existingSlugs = new Set(documents.map((document) => document.slug));
 
@@ -651,4 +934,72 @@ function createUniqueDocumentIdentity(documents: Document[]) {
   }
 
   return { title, slug };
+}
+
+function createUniqueSlugForTitle(
+  documents: Document[],
+  title: string,
+  currentDocumentId?: string
+) {
+  const baseSlug = slugify(title) || "untitled-document";
+  const existingSlugs = new Set(
+    documents
+      .filter((document) => document.id !== currentDocumentId)
+      .map((document) => document.slug)
+  );
+
+  let slug = baseSlug;
+  let index = 2;
+
+  while (existingSlugs.has(slug)) {
+    slug = `${baseSlug}-${index}`;
+    index += 1;
+  }
+
+  return slug;
+}
+
+function getSiblingDocuments(documents: Document[], parentId: string | null) {
+  return [...documents]
+    .filter((document) => document.parentId === parentId)
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
+
+      return left.title.localeCompare(right.title);
+    });
+}
+
+async function groupDocumentsIntoFolder(
+  workspaceId: string,
+  documents: Document[],
+  draggedDocument: Document,
+  targetDocument: Document
+) {
+  const parentId = targetDocument.parentId;
+  const folderIdentity = createUniqueDocumentIdentity(
+    documents,
+    "folder",
+    `${targetDocument.title} Ordner`
+  );
+  const folder = await apiClient.createDocument({
+    workspaceId,
+    parentId,
+    kind: "folder",
+    sortOrder: targetDocument.sortOrder,
+    title: folderIdentity.title,
+    slug: folderIdentity.slug,
+    content: ""
+  });
+
+  await apiClient.updateDocument(targetDocument.id, {
+    parentId: folder.id,
+    sortOrder: 0
+  });
+
+  await apiClient.updateDocument(draggedDocument.id, {
+    parentId: folder.id,
+    sortOrder: 1
+  });
 }

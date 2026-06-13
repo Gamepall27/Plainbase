@@ -17,6 +17,9 @@ export function buildSidebarFolders(
   for (const document of documents) {
     documentMap.set(document.id, {
       id: document.id,
+      kind: document.kind,
+      parentId: document.parentId,
+      sortOrder: document.sortOrder,
       title: document.title,
       slug: document.slug,
       documentId: document.id,
@@ -48,6 +51,9 @@ export function buildSidebarFolders(
   if (draft?.isNew) {
     topLevelItems.unshift({
       id: "draft-object",
+      kind: "document",
+      parentId: null,
+      sortOrder: -1,
       title: draft.title.trim() || "Neues Objekt",
       disabled: true
     });
@@ -61,7 +67,26 @@ export function buildSidebarFolders(
     {
       id: "workspace-documents",
       title: "Eigene Objekte",
-      items: topLevelItems
+      items: sortSidebarItems(topLevelItems)
     }
   ];
+}
+
+function sortSidebarItems(items: SidebarItem[]): SidebarItem[] {
+  return [...items]
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
+
+      if (left.kind !== right.kind) {
+        return left.kind === "folder" ? -1 : 1;
+      }
+
+      return left.title.localeCompare(right.title);
+    })
+    .map((item) => ({
+      ...item,
+      children: item.children ? sortSidebarItems(item.children) : []
+    }));
 }

@@ -1,4 +1,6 @@
+import { dirname, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 import { defaultDemoPassword, hashPassword } from "../auth/passwords.js";
 import type {
   Addon,
@@ -9,11 +11,21 @@ import type {
   Workspace
 } from "@plainbase/shared";
 
+const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(currentDirectory, "..", "..");
+const demoWorkspaceRootPath = resolve(
+  packageRoot,
+  "data",
+  "content",
+  "demo-company"
+);
+
 const workspaces: Workspace[] = [
   {
     id: "workspace-demo-company",
     name: "Demo Company Workspace",
     slug: "demo-company",
+    rootPath: demoWorkspaceRootPath,
     createdAt: "2026-01-10T09:00:00.000Z",
     updatedAt: "2026-01-10T09:00:00.000Z"
   }
@@ -173,11 +185,12 @@ const appState = {
 
 export function seedDatabase(database: DatabaseSync) {
   const insertWorkspace = database.prepare(`
-    INSERT INTO workspaces (id, name, slug, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO workspaces (id, name, slug, root_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       slug = excluded.slug,
+      root_path = excluded.root_path,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at
   `);
@@ -203,6 +216,9 @@ export function seedDatabase(database: DatabaseSync) {
       id,
       workspace_id,
       parent_id,
+      kind,
+      sort_order,
+      file_path,
       title,
       slug,
       content,
@@ -211,10 +227,13 @@ export function seedDatabase(database: DatabaseSync) {
       created_by_user_id,
       updated_by_user_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       workspace_id = excluded.workspace_id,
       parent_id = excluded.parent_id,
+      kind = excluded.kind,
+      sort_order = excluded.sort_order,
+      file_path = excluded.file_path,
       title = excluded.title,
       slug = excluded.slug,
       content = excluded.content,
@@ -276,6 +295,7 @@ export function seedDatabase(database: DatabaseSync) {
         workspace.id,
         workspace.name,
         workspace.slug,
+        workspace.rootPath,
         workspace.createdAt,
         workspace.updatedAt
       );
@@ -306,6 +326,9 @@ export function seedDatabase(database: DatabaseSync) {
         document.id,
         document.workspaceId,
         document.parentId,
+        document.kind,
+        document.sortOrder,
+        document.filePath ?? "",
         document.title,
         document.slug,
         document.content,

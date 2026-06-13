@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { relative, resolve, sep } from "node:path";
 import type { LibraryEntry, LibrarySummaryResponse } from "@plainbase/shared";
@@ -8,6 +8,10 @@ export class ContentStore {
 
   constructor(rootPath: string) {
     this.rootPath = rootPath;
+  }
+
+  getRootPath() {
+    return this.rootPath;
   }
 
   getSummary(): LibrarySummaryResponse {
@@ -59,7 +63,7 @@ export class ContentStore {
 
   private assertAvailable() {
     if (!existsSync(this.rootPath)) {
-      throw new Error(`Content root not found: ${this.rootPath}`);
+      mkdirSync(this.rootPath, { recursive: true });
     }
 
     const stats = statSync(this.rootPath);

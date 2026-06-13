@@ -1,4 +1,4 @@
-import type { Document, Ticket } from "@plainbase/shared";
+import type { Document, DocumentKind, Ticket } from "@plainbase/shared";
 
 export type LoadState<T> =
   | { status: "loading" }
@@ -19,6 +19,9 @@ export type SidebarFolder = {
 
 export type SidebarItem = {
   id: string;
+  kind: DocumentKind;
+  parentId: string | null;
+  sortOrder: number;
   title: string;
   slug?: string;
   documentId?: string;

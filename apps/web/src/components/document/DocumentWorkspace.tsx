@@ -1,11 +1,18 @@
 import { useRef } from "react";
 import type { MarkdownBlockRendererExtension } from "@plainbase/addon-sdk";
-import type { Document, RoleName, User, Workspace } from "@plainbase/shared";
+import type {
+  Document,
+  DocumentKind,
+  RoleName,
+  User,
+  Workspace
+} from "@plainbase/shared";
 import type { LoadState, SaveState } from "../../app/types";
 import { countWords } from "../../lib/document-draft";
 import { formatTimestamp } from "../../lib/formatters";
 import type { EditorDraft } from "../../editor/types";
 import type { FormattingAction } from "../../editor/markdown-format";
+import { CreateObjectMenuButton } from "../layout/CreateObjectMenuButton";
 import {
   DocumentEditorPane,
   type DocumentEditorPaneHandle
@@ -33,8 +40,8 @@ type DocumentWorkspaceProps = {
   showSourceEditor: boolean;
   roleSwitchStatus: SaveState;
   usersState: LoadState<User[]>;
+  onCreateEntry: (kind: DocumentKind) => void;
   onDraftChange: (draft: EditorDraft) => void;
-  onNewDocument: () => void;
   onOpenAdminTools: () => void;
   onSaveDocument: () => void;
   onShowSourceEditorChange: (show: boolean) => void;
@@ -57,8 +64,8 @@ export function DocumentWorkspace({
   showSourceEditor,
   roleSwitchStatus,
   usersState,
+  onCreateEntry,
   onDraftChange,
-  onNewDocument,
   onOpenAdminTools,
   onSaveDocument,
   onShowSourceEditorChange
@@ -78,13 +85,13 @@ export function DocumentWorkspace({
           <span>{currentTabTitle}</span>
           <span className="document-tab-close">x</span>
         </button>
-        <button
-          type="button"
+        <CreateObjectMenuButton
+          ariaLabel="Neues Objekt anlegen"
           className="document-tab-add"
-          onClick={onNewDocument}
-        >
-          +
-        </button>
+          disabled={!mayCreateDocument}
+          label="+"
+          onSelect={onCreateEntry}
+        />
       </div>
 
       <div className="document-shell">

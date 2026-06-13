@@ -803,6 +803,42 @@ html[data-theme="dark"] .user-card-avatar {
   color: #2f6df6;
 }
 
+.create-object-menu-shell {
+  position: relative;
+  display: inline-flex;
+}
+
+.create-object-menu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  min-width: 10rem;
+  padding: 0.45rem;
+  border-radius: 16px;
+  border: 1px solid var(--window-stroke);
+  background: linear-gradient(180deg, var(--surface-0) 0%, var(--surface-1) 100%);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(20px) saturate(170%);
+  display: grid;
+  gap: 0.35rem;
+  z-index: 20;
+}
+
+.create-object-menu-button {
+  width: 100%;
+  padding: 0.72rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+}
+
+.create-object-menu-button:hover {
+  background: var(--surface-1);
+  border-color: rgba(10, 132, 255, 0.12);
+}
+
 .tree-action-button {
   font-size: 1.4rem;
   line-height: 1;
@@ -826,11 +862,25 @@ html[data-theme="dark"] .user-card-avatar {
   font-size: 0.96rem;
 }
 
+.tree-folder-label-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
 .tree-chevron,
 .tree-document-icon {
   width: 16px;
   color: #8d99b7;
   font-size: 0.7rem;
+}
+
+.tree-folder-icon {
+  width: 16px;
+  color: #8d99b7;
+  font-size: 0.78rem;
 }
 
 .tree-folder-content,
@@ -843,6 +893,11 @@ html[data-theme="dark"] .user-card-avatar {
   padding-left: 1rem;
 }
 
+.tree-item {
+  display: grid;
+  gap: 0.15rem;
+}
+
 .tree-document-item {
   width: 100%;
   display: flex;
@@ -850,10 +905,32 @@ html[data-theme="dark"] .user-card-avatar {
   gap: 0.6rem;
   padding: 0.55rem 0.7rem;
   border-radius: 10px;
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   color: #273253;
   text-align: left;
+}
+
+.tree-folder-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #273253;
+  text-align: left;
+}
+
+.tree-item-input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  outline: none;
 }
 
 .tree-document-item.active {
@@ -861,8 +938,59 @@ html[data-theme="dark"] .user-card-avatar {
   color: #2455cc;
 }
 
+.tree-folder-button.drag-over,
+.tree-document-item.drag-over {
+  background: rgba(10, 132, 255, 0.12);
+  border-color: rgba(10, 132, 255, 0.16);
+}
+
 .tree-document-item.placeholder {
   opacity: 0.75;
+}
+
+.tree-drop-indicator {
+  height: 0;
+  margin: 0 0.25rem;
+  border-radius: 999px;
+  background: transparent;
+  transition: height 120ms ease, background 120ms ease;
+}
+
+.tree-drop-indicator.active {
+  height: 4px;
+  background: var(--accent);
+}
+
+.tree-context-menu {
+  position: fixed;
+  min-width: 11rem;
+  padding: 0.45rem;
+  border-radius: 16px;
+  border: 1px solid var(--window-stroke);
+  background: linear-gradient(180deg, var(--surface-0) 0%, var(--surface-1) 100%);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(20px) saturate(170%);
+  display: grid;
+  gap: 0.35rem;
+  z-index: 60;
+}
+
+.tree-context-menu-button {
+  width: 100%;
+  padding: 0.72rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+}
+
+.tree-context-menu-button:hover {
+  color: var(--accent-strong);
+}
+
+.tree-context-menu-button-danger {
+  color: #c2410c;
 }
 
 .addon-check-row {
@@ -1948,6 +2076,7 @@ html[data-theme="dark"] .user-card-avatar {
 .settings-button:hover,
 .workspace-admin-button:hover,
 .document-tab:hover,
+.tree-folder-button:hover,
 .tree-document-item:hover,
 .left-nav-link:hover,
 .linked-document-row:hover {
@@ -2073,6 +2202,30 @@ html[data-theme="dark"] .user-card-avatar {
 .context-tabs {
   background: rgba(255, 255, 255, 0.48);
   backdrop-filter: blur(20px) saturate(170%);
+}
+
+.document-toolbar .toolbar-round-button,
+.document-toolbar .toolbar-secondary-button,
+.document-toolbar .toolbar-primary-button,
+.document-toolbar .format-icon-button {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.document-toolbar .toolbar-primary-button {
+  color: var(--accent-strong);
+}
+
+.document-toolbar .toolbar-round-button:hover,
+.document-toolbar .toolbar-secondary-button:hover,
+.document-toolbar .toolbar-primary-button:hover,
+.document-toolbar .format-icon-button:hover {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--accent-strong);
 }
 
 .document-toolbar,
@@ -2279,6 +2432,24 @@ html[data-theme="dark"] .document-toolbar,
 html[data-theme="dark"] .document-meta-bar,
 html[data-theme="dark"] .context-tabs {
   background: rgba(31, 35, 43, 0.78);
+}
+
+html[data-theme="dark"] .document-toolbar .toolbar-round-button,
+html[data-theme="dark"] .document-toolbar .toolbar-secondary-button,
+html[data-theme="dark"] .document-toolbar .toolbar-primary-button,
+html[data-theme="dark"] .document-toolbar .format-icon-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .document-toolbar .toolbar-round-button:hover,
+html[data-theme="dark"] .document-toolbar .toolbar-secondary-button:hover,
+html[data-theme="dark"] .document-toolbar .toolbar-primary-button:hover,
+html[data-theme="dark"] .document-toolbar .format-icon-button:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent-strong);
 }
 
 html[data-theme="dark"] .document-canvas {
