@@ -82,6 +82,14 @@ export function CreateObjectMenuButton({
             type="button"
             className="create-object-menu-button"
             role="menuitem"
+            onClick={() => handleSelect("kanban")}
+          >
+            Kanban Board
+          </button>
+          <button
+            type="button"
+            className="create-object-menu-button"
+            role="menuitem"
             onClick={() => handleSelect("folder")}
           >
             Ordner

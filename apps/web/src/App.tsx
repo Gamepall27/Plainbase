@@ -9,24 +9,52 @@ import { SettingsDialog } from "./components/layout/SettingsDialog";
 import { FeatureStrip } from "./components/layout/FeatureStrip";
 import { RightSidebar } from "./components/right-panel/RightSidebar";
 import { LeftSidebar } from "./components/sidebar/LeftSidebar";
+import { TicketsWorkspaceView } from "./components/tickets/TicketsWorkspaceView";
 import { useWorkspaceApp } from "./hooks/useWorkspaceApp";
 import { buildSidebarFolders } from "./lib/sidebar-model";
+import type { MainView, QuickLinkId } from "./app/types";
+
+type ThemePreference = "light" | "dark" | "system";
+type ResolvedTheme = "light" | "dark";
 
 export function App() {
   const { actions, data, permissions, state } = useWorkspaceApp();
-  const [theme, setTheme] = useState<"light" | "dark">(() =>
-    getInitialTheme()
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    getInitialThemePreference()
+  );
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() =>
+    getSystemTheme()
   );
   const [activePanelTab, setActivePanelTab] = useState<RightPanelTab>("tickets");
   const [ticketFilter, setTicketFilter] = useState<TicketFilter>("Open");
   const [showSourceEditor, setShowSourceEditor] = useState(false);
   const [isAdminToolsOpen, setIsAdminToolsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeMainView, setActiveMainView] = useState<MainView>("document");
+  const theme = themePreference === "system" ? systemTheme : themePreference;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("plainbase-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem("plainbase-theme", themePreference);
+  }, [themePreference]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function syncSystemTheme(event?: MediaQueryListEvent) {
+      setSystemTheme(event?.matches ?? mediaQuery.matches ? "dark" : "light");
+    }
+
+    syncSystemTheme();
+    mediaQuery.addEventListener("change", syncSystemTheme);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncSystemTheme);
+    };
+  }, []);
 
   useEffect(() => {
     if (!permissions.mayManageUsers && isAdminToolsOpen) {
@@ -53,16 +81,31 @@ export function App() {
   };
 
   async function handleCreateEntry(kind: DocumentKind) {
+    setActiveMainView("document");
     setIsAdminToolsOpen(false);
     const created = await actions.createEntry(kind);
 
-    if (created?.kind === "document") {
+    if (created?.kind && created.kind !== "folder") {
       setShowSourceEditor(true);
     }
   }
 
   function handleOpenAdminTools() {
     setIsAdminToolsOpen(true);
+  }
+
+  function handleSelectDocument(documentId: string) {
+    setActiveMainView("document");
+    actions.setSelectedDocumentId(documentId);
+  }
+
+  function handleQuickLinkSelect(linkId: QuickLinkId) {
+    if (linkId === "tickets") {
+      setActiveMainView("tickets");
+      return;
+    }
+
+    setActiveMainView("document");
   }
 
   return (
@@ -81,6 +124,7 @@ export function App() {
 
       <div className="workspace-layout">
         <LeftSidebar
+          activeMainView={activeMainView}
           addonPanelContext={addonPanelContext}
           addons={data.addons}
           documentsState={state.documentsState}
@@ -105,9 +149,10 @@ export function App() {
           onDocumentRename={(documentId, title) =>
             actions.renameDocumentInTree(documentId, title)
           }
-          onDocumentSelect={actions.setSelectedDocumentId}
+          onDocumentSelect={handleSelectDocument}
           onCreateEntry={(kind) => void handleCreateEntry(kind)}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onQuickLinkSelect={handleQuickLinkSelect}
           onWorkspaceSelect={actions.setSelectedWorkspaceId}
         />
 
@@ -126,6 +171,15 @@ export function App() {
             onUserDelete={actions.deleteUser}
             onWorkspaceCreate={actions.createWorkspace}
           />
+        ) : activeMainView === "tickets" ? (
+          <TicketsWorkspaceView
+            documents={data.documents}
+            mayCreateDocument={permissions.mayCreateDocument}
+            selectedWorkspace={data.selectedWorkspace}
+            tickets={data.tickets}
+            onCreateEntry={(kind) => void handleCreateEntry(kind)}
+            onDocumentSelect={handleSelectDocument}
+          />
         ) : (
           <DocumentWorkspace
             activeRole={data.activeRole}
@@ -142,6 +196,7 @@ export function App() {
             selectedWorkspace={data.selectedWorkspace}
             selectedWorkspaceId={state.selectedWorkspaceId}
             showSourceEditor={showSourceEditor}
+            tickets={data.tickets}
             usersState={state.usersState}
             mayManageUsers={permissions.mayManageUsers}
             onCreateEntry={(kind) => void handleCreateEntry(kind)}
@@ -163,7 +218,7 @@ export function App() {
           rightSidebarPanels={data.rightSidebarPanels}
           ticketFilter={ticketFilter}
           tickets={data.tickets}
-          onDocumentSelect={actions.setSelectedDocumentId}
+          onDocumentSelect={handleSelectDocument}
           onPanelTabChange={setActivePanelTab}
           onTicketFilterChange={setTicketFilter}
         />
@@ -173,11 +228,10 @@ export function App() {
         isOpen={isSettingsOpen}
         selectedWorkspace={data.selectedWorkspace}
         theme={theme}
+        themePreference={themePreference}
         demoAuth={state.demoUserState.status === "success" ? state.demoUserState.data : null}
         onClose={() => setIsSettingsOpen(false)}
-        onThemeToggle={() =>
-          setTheme((current) => (current === "light" ? "dark" : "light"))
-        }
+        onThemeChange={setThemePreference}
       />
 
       <FeatureStrip />
@@ -185,15 +239,27 @@ export function App() {
   );
 }
 
-function getInitialTheme() {
+function getInitialThemePreference(): ThemePreference {
   if (typeof window === "undefined") {
-    return "light" as const;
+    return "system";
   }
 
   const storedTheme = window.localStorage.getItem("plainbase-theme");
 
-  if (storedTheme === "light" || storedTheme === "dark") {
+  if (
+    storedTheme === "light" ||
+    storedTheme === "dark" ||
+    storedTheme === "system"
+  ) {
     return storedTheme;
+  }
+
+  return "system";
+}
+
+function getSystemTheme(): ResolvedTheme {
+  if (typeof window === "undefined") {
+    return "light";
   }
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches

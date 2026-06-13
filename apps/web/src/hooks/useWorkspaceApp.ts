@@ -228,13 +228,13 @@ export function useWorkspaceApp() {
         if (
           currentDocumentId &&
           selectedDocument &&
-          selectedDocument.kind === "document"
+          selectedDocument.kind !== "folder"
         ) {
           return currentDocumentId;
         }
 
         const nextDocumentId =
-          documents.find((item) => item.kind === "document")?.id ?? null;
+          documents.find((item) => item.kind !== "folder")?.id ?? null;
 
         if (!nextDocumentId) {
           if (documents.length === 0) {
@@ -372,10 +372,10 @@ export function useWorkspaceApp() {
         sortOrder: siblingDocuments.length,
         title,
         slug,
-        content: kind === "folder" ? "" : "# Neues Dokument\n"
+        content: getInitialContentForKind(kind)
       });
 
-      if (createdDocument.kind === "document") {
+      if (createdDocument.kind !== "folder") {
         setSelectedDocumentId(createdDocument.id);
         setDocumentState({ status: "success", data: createdDocument });
         setDraft(mapDocumentToDraft(createdDocument));
@@ -383,10 +383,9 @@ export function useWorkspaceApp() {
       }
       setSaveState({
         status: "success",
-        message:
-          createdDocument.kind === "folder"
-            ? `Ordner "${createdDocument.title}" wurde angelegt.`
-            : `"${createdDocument.title}" wurde angelegt.`
+        message: `${formatDocumentKindLabel(
+          createdDocument.kind
+        )} "${createdDocument.title}" wurde angelegt.`
       });
 
       await loadWorkspaceData(selectedWorkspaceId);
@@ -426,7 +425,7 @@ export function useWorkspaceApp() {
         return false;
       }
 
-      if (placement === "inside" && targetDocument.kind === "document") {
+      if (placement === "inside" && targetDocument.kind !== "folder") {
         await groupDocumentsIntoFolder(
           selectedWorkspaceId,
           documents,
@@ -630,10 +629,9 @@ export function useWorkspaceApp() {
 
       setSaveState({
         status: "success",
-        message:
-          currentDocument.kind === "folder"
-            ? `Ordner "${currentDocument.title}" wurde geloescht.`
-            : `"${currentDocument.title}" wurde geloescht.`
+        message: `${formatDocumentKindLabel(
+          currentDocument.kind
+        )} "${currentDocument.title}" wurde geloescht.`
       });
       await loadWorkspaceData(selectedWorkspaceId);
       return true;
@@ -918,7 +916,12 @@ export function useWorkspaceApp() {
 function createUniqueDocumentIdentity(
   documents: Document[],
   kind: DocumentKind,
-  baseTitle = kind === "folder" ? "Neuer Ordner" : "Untitled document"
+  baseTitle =
+    kind === "folder"
+      ? "Neuer Ordner"
+      : kind === "kanban"
+        ? "Neues Kanban Board"
+        : "Untitled document"
 ) {
   const baseSlug = slugify(baseTitle);
   const existingSlugs = new Set(documents.map((document) => document.slug));
@@ -934,6 +937,30 @@ function createUniqueDocumentIdentity(
   }
 
   return { title, slug };
+}
+
+function getInitialContentForKind(kind: DocumentKind) {
+  if (kind === "folder") {
+    return "";
+  }
+
+  if (kind === "kanban") {
+    return "## Board-Notizen\n";
+  }
+
+  return "# Neues Dokument\n";
+}
+
+function formatDocumentKindLabel(kind: DocumentKind) {
+  if (kind === "folder") {
+    return "Ordner";
+  }
+
+  if (kind === "kanban") {
+    return "Kanban Board";
+  }
+
+  return "Dokument";
 }
 
 function createUniqueSlugForTitle(

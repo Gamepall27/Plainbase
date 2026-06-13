@@ -5,18 +5,20 @@ type SettingsDialogProps = {
   isOpen: boolean;
   selectedWorkspace: Workspace | null;
   theme: "light" | "dark";
+  themePreference: "light" | "dark" | "system";
   demoAuth: DemoAuth | null;
   onClose: () => void;
-  onThemeToggle: () => void;
+  onThemeChange: (theme: "light" | "dark" | "system") => void;
 };
 
 export function SettingsDialog({
   isOpen,
   selectedWorkspace,
   theme,
+  themePreference,
   demoAuth,
   onClose,
-  onThemeToggle
+  onThemeChange
 }: SettingsDialogProps) {
   if (!isOpen) {
     return null;
@@ -71,23 +73,25 @@ export function SettingsDialog({
         <div className="settings-list" role="list" aria-label="Einstellungen">
           <div className="settings-list-item" role="listitem">
             <div className="settings-list-copy">
-              <span className="profile-dialog-label">Darstellung</span>
-              <strong>{theme === "light" ? "Light Mode" : "Dark Mode"}</strong>
+              <strong>Darstellungseinstellungen</strong>
               <p className="profile-dialog-copy">
-                Wechsle jederzeit zwischen heller und dunkler Oberflaeche.
+                Waehle Light, Dark oder uebernimm automatisch die Darstellung
+                deines Computers.
               </p>
             </div>
 
-            <button
-              type="button"
-              className={`settings-switch${theme === "dark" ? " is-on" : ""}`}
-              role="switch"
-              aria-checked={theme === "dark"}
-              aria-label="Dark Mode umschalten"
-              onClick={onThemeToggle}
+            <select
+              className="sidebar-select settings-select"
+              aria-label="Theme auswaehlen"
+              value={themePreference}
+              onChange={(event) =>
+                onThemeChange(event.target.value as "light" | "dark" | "system")
+              }
             >
-              <span className="settings-switch-thumb" aria-hidden="true" />
-            </button>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="system">System</option>
+            </select>
           </div>
 
           <div className="settings-list-item" role="listitem">

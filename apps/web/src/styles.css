@@ -433,6 +433,11 @@ textarea:disabled {
   min-width: 0;
 }
 
+.settings-select {
+  width: min(220px, 100%);
+  min-width: min(220px, 100%);
+}
+
 .settings-switch {
   width: 3.5rem;
   min-width: 3.5rem;
@@ -571,6 +576,7 @@ html[data-theme="dark"] .topbar-workspace-pill,
 html[data-theme="dark"] .topbar-role,
 html[data-theme="dark"] .toolbar-select,
 html[data-theme="dark"] .sidebar-select,
+html[data-theme="dark"] .settings-select,
 html[data-theme="dark"] .field,
 html[data-theme="dark"] .source-editor-textarea,
 html[data-theme="dark"] .topbar-icon-button,
@@ -783,6 +789,13 @@ html[data-theme="dark"] .user-card-avatar {
   text-align: left;
 }
 
+.left-nav-link.active {
+  padding-left: 0.7rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(47, 109, 246, 0.12), rgba(126, 166, 255, 0.08));
+  color: #2455cc;
+}
+
 .left-nav-link-icon {
   width: 22px;
   color: #7f8db0;
@@ -877,6 +890,7 @@ html[data-theme="dark"] .user-card-avatar {
   width: 16px;
   color: #8d99b7;
   font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .tree-folder-icon {
@@ -1827,6 +1841,119 @@ html[data-theme="dark"] .user-card-avatar {
   background: rgba(250, 252, 255, 0.96);
 }
 
+.ticket-overview-copy {
+  margin: 0.7rem 0 0;
+  max-width: 46rem;
+}
+
+.ticket-overview-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.ticket-overview-grid,
+.kanban-board-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.ticket-overview-card,
+.kanban-column,
+.kanban-ticket-card,
+.kanban-notes-card {
+  padding: 1rem;
+  border-radius: 18px;
+}
+
+.ticket-overview-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.ticket-overview-card-muted {
+  opacity: 0.92;
+}
+
+.ticket-overview-card-head,
+.kanban-column-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ticket-overview-card-head h3,
+.kanban-column-head strong {
+  margin: 0.2rem 0 0;
+}
+
+.ticket-overview-ticket-list,
+.kanban-column-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ticket-overview-ticket-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(23, 32, 58, 0.08);
+}
+
+.ticket-overview-ticket-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.ticket-overview-ticket-row strong,
+.kanban-ticket-card h3 {
+  display: block;
+  margin: 0;
+}
+
+.ticket-overview-ticket-row p {
+  margin: 0.35rem 0 0;
+  color: #5f6d93;
+}
+
+.ticket-overview-ticket-meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+  color: #6b789b;
+  font-size: 0.86rem;
+}
+
+.kanban-board-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.kanban-column {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.kanban-column-head span {
+  color: #6b789b;
+}
+
+.kanban-ticket-card {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.kanban-notes-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
 .inline-link-button {
   width: fit-content;
   padding: 0;
@@ -1988,6 +2115,7 @@ html[data-theme="dark"] .user-card-avatar {
 
 .app-topbar {
   position: relative;
+  z-index: 10;
   min-height: 80px;
   padding: 1rem 1.15rem;
   border: 0;
@@ -2027,6 +2155,7 @@ html[data-theme="dark"] .user-card-avatar {
 .topbar-role,
 .toolbar-select,
 .sidebar-select,
+.settings-select,
 .field,
 .source-editor-textarea,
 .topbar-icon-button,
@@ -2093,11 +2222,15 @@ html[data-theme="dark"] .user-card-avatar {
 .document-shell,
 .source-editor-card,
 .ticket-card,
+.ticket-overview-card,
 .link-card,
 .addon-panel-card,
 .feature-card,
 .embedded-addon-panel,
 .addon-renderer-block,
+.kanban-column,
+.kanban-ticket-card,
+.kanban-notes-card,
 .user-card,
 .empty-state {
   border: 1px solid var(--window-stroke);
@@ -2105,6 +2238,11 @@ html[data-theme="dark"] .user-card-avatar {
     linear-gradient(180deg, var(--surface-0) 0%, var(--surface-1) 100%);
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(24px) saturate(170%);
+}
+
+.topbar-user-menu {
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  backdrop-filter: none;
 }
 
 .topbar-user-menu,
@@ -2333,6 +2471,7 @@ html[data-theme="dark"] .user-card-avatar {
 
 .field,
 .sidebar-select,
+.settings-select,
 .toolbar-select,
 .source-editor-textarea {
   color: var(--text-strong);
@@ -2340,6 +2479,7 @@ html[data-theme="dark"] .user-card-avatar {
 
 .field:focus,
 .sidebar-select:focus,
+.settings-select:focus,
 .toolbar-select:focus,
 .source-editor-textarea:focus,
 .canvas-title-input:focus {
@@ -2413,21 +2553,34 @@ html[data-theme="dark"] .settings-switch {
   color: var(--text-strong);
 }
 
+html[data-theme="dark"] .topbar-user-menu {
+  background: linear-gradient(180deg, #323845 0%, #282e38 100%);
+}
+
 html[data-theme="dark"] .topbar-user-menu,
 html[data-theme="dark"] .profile-dialog,
 html[data-theme="dark"] .document-shell,
 html[data-theme="dark"] .source-editor-card,
 html[data-theme="dark"] .ticket-card,
+html[data-theme="dark"] .ticket-overview-card,
 html[data-theme="dark"] .link-card,
 html[data-theme="dark"] .addon-panel-card,
 html[data-theme="dark"] .feature-card,
 html[data-theme="dark"] .embedded-addon-panel,
 html[data-theme="dark"] .addon-renderer-block,
+html[data-theme="dark"] .kanban-column,
+html[data-theme="dark"] .kanban-ticket-card,
+html[data-theme="dark"] .kanban-notes-card,
 html[data-theme="dark"] .user-card,
 html[data-theme="dark"] .empty-state {
   background:
     linear-gradient(180deg, var(--surface-1) 0%, rgba(31, 35, 43, 0.9) 100%);
   border-color: var(--window-stroke);
+}
+
+html[data-theme="dark"] .left-nav-link.active {
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.22), rgba(64, 156, 255, 0.12));
+  color: #8fc1ff;
 }
 
 html[data-theme="dark"] .document-toolbar,
@@ -2580,6 +2733,21 @@ html[data-theme="dark"] .unsaved-pill {
   .settings-list-item {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .kanban-board-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-overview-ticket-row,
+  .ticket-overview-card-head,
+  .kanban-column-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ticket-overview-ticket-meta {
+    justify-items: start;
   }
 
   .canvas-title,

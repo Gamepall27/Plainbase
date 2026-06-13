@@ -48,7 +48,8 @@ export function SidebarTreeItem({
   const isCollapsed = isFolder && collapsedFolderIds.includes(item.id);
   const isEditing = editingItemId === item.id;
   const isSelected = item.documentId === selectedDocumentId;
-  const isDraggable = Boolean(item.documentId) && item.kind === "document" && !item.disabled;
+  const isDraggable = Boolean(item.documentId) && item.kind !== "folder" && !item.disabled;
+  const itemIcon = item.kind === "kanban" ? "KB" : "[]";
   const className = [
     isFolder ? "tree-folder-button" : "tree-document-item",
     isSelected ? "active" : "",
@@ -140,7 +141,7 @@ export function SidebarTreeItem({
       ) : item.documentId ? (
         isEditing ? (
           <div className={className}>
-            <span className="tree-document-icon">[]</span>
+            <span className="tree-document-icon">{itemIcon}</span>
             <input
               className="tree-item-input"
               autoFocus
@@ -177,13 +178,13 @@ export function SidebarTreeItem({
             onDragLeave={() => setActiveDropPlacement(null)}
             onDrop={(event) => handleDrop(event, "inside")}
           >
-            <span className="tree-document-icon">[]</span>
+            <span className="tree-document-icon">{itemIcon}</span>
             <span>{item.title}</span>
           </button>
         )
       ) : (
         <div className="tree-document-item placeholder">
-          <span className="tree-document-icon">[]</span>
+          <span className="tree-document-icon">{itemIcon}</span>
           <span>{item.title}</span>
         </div>
       )}

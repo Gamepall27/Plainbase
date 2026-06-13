@@ -3,12 +3,13 @@ import type { DocumentKind } from "@plainbase/shared";
 import type { SidebarPanelContext, SidebarPanelExtension } from "@plainbase/addon-sdk";
 import type { Addon, Document, Ticket, Workspace } from "@plainbase/shared";
 import type { ReactNode } from "react";
-import type { LoadState, SidebarFolder } from "../../app/types";
+import type { LoadState, MainView, QuickLinkId, SidebarFolder } from "../../app/types";
 import { quickLinks } from "../../lib/sidebar-model";
 import { CreateObjectMenuButton } from "../layout/CreateObjectMenuButton";
 import { SidebarTreeItem } from "./SidebarTreeItem";
 
 type LeftSidebarProps = {
+  activeMainView: MainView;
   addonPanelContext: SidebarPanelContext;
   addons: Addon[];
   documentsState: LoadState<Document[]>;
@@ -34,10 +35,12 @@ type LeftSidebarProps = {
   onDocumentSelect: (documentId: string) => void;
   onCreateEntry: (kind: DocumentKind) => void;
   onOpenSettings: () => void;
+  onQuickLinkSelect: (linkId: QuickLinkId) => void;
   onWorkspaceSelect: (workspaceId: string) => void;
 };
 
 export function LeftSidebar({
+  activeMainView,
   addonPanelContext,
   addons,
   documentsState,
@@ -59,6 +62,7 @@ export function LeftSidebar({
   onDocumentSelect,
   onCreateEntry,
   onOpenSettings,
+  onQuickLinkSelect,
   onWorkspaceSelect
 }: LeftSidebarProps) {
   const [draggedDocumentId, setDraggedDocumentId] = useState<string | null>(null);
@@ -190,9 +194,19 @@ export function LeftSidebar({
       <section className="left-panel-card">
         <div className="left-nav-links">
           {quickLinks.map((link) => (
-            <button key={link} type="button" className="left-nav-link">
+            <button
+              key={link.id}
+              type="button"
+              className={
+                (link.id === "tickets" && activeMainView === "tickets") ||
+                (link.id === "all-documents" && activeMainView === "document")
+                  ? "left-nav-link active"
+                  : "left-nav-link"
+              }
+              onClick={() => onQuickLinkSelect(link.id)}
+            >
               <span className="left-nav-link-icon">+</span>
-              <span>{link}</span>
+              <span>{link.label}</span>
             </button>
           ))}
         </div>

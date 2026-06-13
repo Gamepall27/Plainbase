@@ -83,7 +83,7 @@ export type Workspace = {
   updatedAt: string;
 };
 
-export type DocumentKind = "document" | "folder";
+export type DocumentKind = "document" | "folder" | "kanban";
 
 export type Document = {
   id: string;

@@ -107,7 +107,12 @@ export class DocumentFilesystemStore {
     slug: string,
     kind: DocumentKind
   ) {
-    const segment = kind === "folder" ? slug : `${slug}.md`;
+    const segment =
+      kind === "folder"
+        ? slug
+        : kind === "kanban"
+          ? `${slug}.kanban.md`
+          : `${slug}.md`;
 
     return parentFilePath ? `${parentFilePath}/${segment}` : segment;
   }
@@ -158,11 +163,14 @@ export class DocumentFilesystemStore {
         return;
       }
 
-      const baseName = entry.name.replace(/\.md$/i, "");
+      const isKanban = entry.name.toLowerCase().endsWith(".kanban.md");
+      const baseName = isKanban
+        ? entry.name.replace(/\.kanban\.md$/i, "")
+        : entry.name.replace(/\.md$/i, "");
       entries.push({
         filePath: this.relativeToRoot(workspaceRoot, absolutePath),
         parentFilePath,
-        kind: "document",
+        kind: isKanban ? "kanban" : "document",
         slug: slugifyPathSegment(baseName),
         title: humanizeName(baseName),
         content: readFileSync(absolutePath, "utf8"),

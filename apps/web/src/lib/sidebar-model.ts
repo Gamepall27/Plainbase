@@ -1,11 +1,15 @@
 import type { Document } from "@plainbase/shared";
 import type { EditorDraft } from "../editor/types";
-import type { SidebarFolder, SidebarItem } from "../app/types";
+import type { QuickLinkId, SidebarFolder, SidebarItem } from "../app/types";
 
-export const quickLinks = [
-  "Alle Dokumente",
-  "Favoriten",
-  "Kuerzlich geoeffnet"
+export const quickLinks: Array<{
+  id: QuickLinkId;
+  label: string;
+}> = [
+  { id: "all-documents", label: "Alle Dokumente" },
+  { id: "favorites", label: "Favoriten" },
+  { id: "recent", label: "Kuerzlich geoeffnet" },
+  { id: "tickets", label: "Tickets" }
 ];
 
 export function buildSidebarFolders(

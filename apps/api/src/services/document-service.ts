@@ -20,7 +20,7 @@ import {
   validateSlug
 } from "./validation.js";
 
-const documentKinds = ["document", "folder"] satisfies DocumentKind[];
+const documentKinds = ["document", "folder", "kanban"] satisfies DocumentKind[];
 const syncUserId = "user-admin";
 
 export class DocumentService {
@@ -154,7 +154,7 @@ export class DocumentService {
       this.documentFilesystemStore.moveEntry(workspace, currentFilePath, nextFilePath);
     }
 
-    if (currentDocument.kind === "document" && content !== currentDocument.content) {
+    if (currentDocument.kind !== "folder" && content !== currentDocument.content) {
       this.documentFilesystemStore.updateDocumentContent(
         workspace,
         nextFilePath,
@@ -301,7 +301,7 @@ export class DocumentService {
           slug: existingDocument.slug,
           content: entry.kind === "folder" ? "" : entry.content,
           updatedAt:
-            entry.kind === "document" && entry.content !== existingDocument.content
+            entry.kind !== "folder" && entry.content !== existingDocument.content
               ? new Date().toISOString()
               : existingDocument.updatedAt
         };

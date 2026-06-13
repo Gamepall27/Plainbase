@@ -4,14 +4,20 @@ import type {
   Document,
   DocumentKind,
   RoleName,
+  Ticket,
   User,
   Workspace
 } from "@plainbase/shared";
 import type { LoadState, SaveState } from "../../app/types";
 import { countWords } from "../../lib/document-draft";
 import { formatTimestamp } from "../../lib/formatters";
+import {
+  formatTicketFilterLabel,
+  getTicketStatusClassName
+} from "../../lib/ticket-format";
 import type { EditorDraft } from "../../editor/types";
 import type { FormattingAction } from "../../editor/markdown-format";
+import { MarkdownPreview } from "../MarkdownPreview";
 import { CreateObjectMenuButton } from "../layout/CreateObjectMenuButton";
 import {
   DocumentEditorPane,
@@ -39,6 +45,7 @@ type DocumentWorkspaceProps = {
   selectedWorkspaceId: string | null;
   showSourceEditor: boolean;
   roleSwitchStatus: SaveState;
+  tickets: Ticket[];
   usersState: LoadState<User[]>;
   onCreateEntry: (kind: DocumentKind) => void;
   onDraftChange: (draft: EditorDraft) => void;
@@ -63,6 +70,7 @@ export function DocumentWorkspace({
   selectedWorkspaceId,
   showSourceEditor,
   roleSwitchStatus,
+  tickets,
   usersState,
   onCreateEntry,
   onDraftChange,
@@ -73,6 +81,7 @@ export function DocumentWorkspace({
   const previewEditorRef = useRef<PreviewEditorHandle | null>(null);
   const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
   const wordCount = countWords(draft?.content ?? "");
+  const isKanbanBoard = selectedDocument?.kind === "kanban";
 
   function applyFormatting(action: FormattingAction) {
     previewEditorRef.current?.applyFormatting(action);
@@ -96,6 +105,7 @@ export function DocumentWorkspace({
 
       <div className="document-shell">
         <DocumentToolbar
+          isKanbanBoard={isKanbanBoard}
           mayEditDocument={mayEditDocument}
           saveState={saveState}
           showSourceEditor={showSourceEditor}
@@ -179,28 +189,40 @@ export function DocumentWorkspace({
             </div>
           )}
 
-          <PreviewEditor
-            ref={previewEditorRef}
-            canEdit={mayEditDocument}
-            content={draft?.content ?? ""}
-            currentDocument={selectedDocument}
-            markdownBlockRenderers={markdownBlockRenderers}
-            workspaceId={selectedWorkspaceId}
-            onContentChange={(content) => {
-              if (!draft) {
-                return;
-              }
+          {isKanbanBoard ? (
+            <KanbanBoardPreview
+              content={draft?.content ?? ""}
+              currentDocument={selectedDocument}
+              markdownBlockRenderers={markdownBlockRenderers}
+              tickets={tickets}
+              workspaceId={selectedWorkspaceId}
+            />
+          ) : (
+            <PreviewEditor
+              ref={previewEditorRef}
+              canEdit={mayEditDocument}
+              content={draft?.content ?? ""}
+              currentDocument={selectedDocument}
+              markdownBlockRenderers={markdownBlockRenderers}
+              workspaceId={selectedWorkspaceId}
+              onContentChange={(content) => {
+                if (!draft) {
+                  return;
+                }
 
-              onDraftChange({
-                ...draft,
-                content
-              });
-            }}
-          />
+                onDraftChange({
+                  ...draft,
+                  content
+                });
+              }}
+            />
+          )}
 
           <div className="document-tip">
-            <strong>Tipp:</strong> Nutze die Add-ons in der rechten Seitenleiste,
-            um Tickets, Diagramme und mehr zu verwalten.
+            <strong>Tipp:</strong>{" "}
+            {isKanbanBoard
+              ? "Das Board zeigt die aktuellen Workspace-Tickets gruppiert nach Status."
+              : "Nutze die Add-ons in der rechten Seitenleiste, um Tickets, Diagramme und mehr zu verwalten."}
           </div>
         </section>
 
@@ -243,6 +265,7 @@ export function DocumentWorkspace({
 
 type DocumentToolbarProps = {
   canSave: boolean;
+  isKanbanBoard: boolean;
   mayEditDocument: boolean;
   saveState: SaveState;
   showSourceEditor: boolean;
@@ -253,6 +276,7 @@ type DocumentToolbarProps = {
 
 function DocumentToolbar({
   canSave,
+  isKanbanBoard,
   mayEditDocument,
   saveState,
   showSourceEditor,
@@ -271,10 +295,14 @@ function DocumentToolbar({
         </button>
       </div>
 
-      <EditorFormattingToolbar
-        disabled={!mayEditDocument}
-        onApply={onApplyFormatting}
-      />
+      {isKanbanBoard ? (
+        <div className="toolbar-mode-label">Kanban Board</div>
+      ) : (
+        <EditorFormattingToolbar
+          disabled={!mayEditDocument}
+          onApply={onApplyFormatting}
+        />
+      )}
 
       <div className="toolbar-right">
         <button
@@ -320,6 +348,80 @@ function WorkspaceNotices({ roleSwitchStatus, saveState }: WorkspaceNoticesProps
       )}
       {saveState.status === "success" && (
         <p className="feedback success">{saveState.message}</p>
+      )}
+    </div>
+  );
+}
+
+type KanbanBoardPreviewProps = {
+  content: string;
+  currentDocument: Document | null;
+  markdownBlockRenderers: MarkdownBlockRendererExtension<string>[];
+  tickets: Ticket[];
+  workspaceId: string | null;
+};
+
+function KanbanBoardPreview({
+  content,
+  currentDocument,
+  markdownBlockRenderers,
+  tickets,
+  workspaceId
+}: KanbanBoardPreviewProps) {
+  const ticketsByStatus = {
+    Open: tickets.filter((ticket) => ticket.status === "Open"),
+    "In Progress": tickets.filter((ticket) => ticket.status === "In Progress"),
+    Done: tickets.filter((ticket) => ticket.status === "Done")
+  } satisfies Record<Ticket["status"], Ticket[]>;
+
+  return (
+    <div className="kanban-board-layout">
+      <div className="kanban-board-grid">
+        {(Object.entries(ticketsByStatus) as Array<[Ticket["status"], Ticket[]]>).map(
+          ([status, statusTickets]) => (
+            <section key={status} className="kanban-column">
+              <div className="kanban-column-head">
+                <strong>{formatTicketFilterLabel(status)}</strong>
+                <span>{statusTickets.length}</span>
+              </div>
+
+              <div className="kanban-column-list">
+                {statusTickets.length === 0 && (
+                  <div className="empty-ticket-state">
+                    Keine Tickets in dieser Spalte.
+                  </div>
+                )}
+
+                {statusTickets.map((ticket) => (
+                  <article key={ticket.id} className="kanban-ticket-card">
+                    <div className="ticket-card-head">
+                      <h3>{ticket.title}</h3>
+                      <span className={getTicketStatusClassName(ticket.status)}>
+                        {formatTicketFilterLabel(ticket.status)}
+                      </span>
+                    </div>
+                    <p className="ticket-code">{ticket.description}</p>
+                    <div className="ticket-card-footer">
+                      <span>{formatTimestamp(ticket.updatedAt)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )
+        )}
+      </div>
+
+      {content.trim().length > 0 && (
+        <section className="kanban-notes-card">
+          <p className="section-label">Board-Notizen</p>
+          <MarkdownPreview
+            content={content}
+            currentDocument={currentDocument}
+            markdownBlockRenderers={markdownBlockRenderers}
+            workspaceId={workspaceId}
+          />
+        </section>
       )}
     </div>
   );

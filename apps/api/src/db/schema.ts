@@ -34,7 +34,7 @@ const schemaStatements = [
       id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL,
       parent_id TEXT,
-      kind TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder')),
+      kind TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder', 'kanban')),
       sort_order INTEGER NOT NULL DEFAULT -1,
       file_path TEXT NOT NULL DEFAULT '',
       title TEXT NOT NULL,
@@ -103,12 +103,56 @@ const schemaStatements = [
   `
 ];
 
+const documentsTableDefinition = `
+  CREATE TABLE documents (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    parent_id TEXT,
+    kind TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder', 'kanban')),
+    sort_order INTEGER NOT NULL DEFAULT -1,
+    file_path TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    created_by_user_id TEXT NOT NULL,
+    updated_by_user_id TEXT NOT NULL,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES documents (id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+    FOREIGN KEY (updated_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+    UNIQUE (workspace_id, slug)
+  )
+`;
+
+const ticketsTableDefinition = `
+  CREATE TABLE tickets (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    document_id TEXT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('Open', 'In Progress', 'Done')),
+    creator_id TEXT NOT NULL,
+    assignee_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+    FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE SET NULL,
+    FOREIGN KEY (creator_id) REFERENCES users (id) ON DELETE RESTRICT,
+    FOREIGN KEY (assignee_id) REFERENCES users (id) ON DELETE SET NULL
+  )
+`;
+
 export function applySchema(database: DatabaseSync) {
   database.exec("PRAGMA foreign_keys = ON");
 
   for (const statement of schemaStatements) {
     database.exec(statement);
   }
+
+  migrateDocumentsTableForKanban(database);
 
   ensureColumn(database, "users", "username", "TEXT");
   ensureColumn(database, "users", "password_hash", "TEXT");
@@ -123,7 +167,7 @@ export function applySchema(database: DatabaseSync) {
     database,
     "documents",
     "kind",
-    "TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder'))"
+    "TEXT NOT NULL DEFAULT 'document' CHECK (kind IN ('document', 'folder', 'kanban'))"
   );
   ensureColumn(
     database,
@@ -186,6 +230,104 @@ export function applySchema(database: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS documents_workspace_file_path_idx
     ON documents (workspace_id, file_path)
   `);
+}
+
+function migrateDocumentsTableForKanban(database: DatabaseSync) {
+  const documentsTableSql = getTableSql(database, "documents");
+
+  if (documentsTableSql.includes("'kanban'")) {
+    return;
+  }
+
+  database.exec("PRAGMA foreign_keys = OFF");
+  database.exec("BEGIN");
+
+  try {
+    database.exec("ALTER TABLE tickets RENAME TO tickets_legacy");
+    database.exec("ALTER TABLE documents RENAME TO documents_legacy");
+    database.exec(documentsTableDefinition);
+    database.exec(ticketsTableDefinition);
+    database.exec(`
+      INSERT INTO documents (
+        id,
+        workspace_id,
+        parent_id,
+        kind,
+        sort_order,
+        file_path,
+        title,
+        slug,
+        content,
+        created_at,
+        updated_at,
+        created_by_user_id,
+        updated_by_user_id
+      )
+      SELECT
+        id,
+        workspace_id,
+        parent_id,
+        kind,
+        sort_order,
+        file_path,
+        title,
+        slug,
+        content,
+        created_at,
+        updated_at,
+        created_by_user_id,
+        updated_by_user_id
+      FROM documents_legacy
+    `);
+    database.exec(`
+      INSERT INTO tickets (
+        id,
+        workspace_id,
+        document_id,
+        title,
+        description,
+        status,
+        creator_id,
+        assignee_id,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        workspace_id,
+        document_id,
+        title,
+        description,
+        status,
+        creator_id,
+        assignee_id,
+        created_at,
+        updated_at
+      FROM tickets_legacy
+    `);
+    database.exec("DROP TABLE tickets_legacy");
+    database.exec("DROP TABLE documents_legacy");
+    database.exec("COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+function getTableSql(database: DatabaseSync, tableName: string) {
+  const row = database
+    .prepare(
+      `
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+      `
+    )
+    .get(tableName) as { sql: string } | undefined;
+
+  return row?.sql ?? "";
 }
 
 function ensureColumn(

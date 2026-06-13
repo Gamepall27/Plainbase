@@ -30,6 +30,12 @@ export type SidebarItem = {
 };
 
 export type RightPanelTab = "tickets" | "links" | "notes";
+export type MainView = "document" | "tickets";
+export type QuickLinkId =
+  | "all-documents"
+  | "favorites"
+  | "recent"
+  | "tickets";
 
 export type TicketFilter = Ticket["status"];
 
