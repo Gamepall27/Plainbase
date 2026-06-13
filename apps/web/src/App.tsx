@@ -9,7 +9,6 @@ import { SettingsDialog } from "./components/layout/SettingsDialog";
 import { FeatureStrip } from "./components/layout/FeatureStrip";
 import { RightSidebar } from "./components/right-panel/RightSidebar";
 import { LeftSidebar } from "./components/sidebar/LeftSidebar";
-import { TicketsWorkspaceView } from "./components/tickets/TicketsWorkspaceView";
 import { useWorkspaceApp } from "./hooks/useWorkspaceApp";
 import { buildSidebarFolders } from "./lib/sidebar-model";
 import type { MainView, QuickLinkId } from "./app/types";
@@ -30,7 +29,6 @@ export function App() {
   const [showSourceEditor, setShowSourceEditor] = useState(false);
   const [isAdminToolsOpen, setIsAdminToolsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeMainView, setActiveMainView] = useState<MainView>("document");
   const theme = themePreference === "system" ? systemTheme : themePreference;
 
   useEffect(() => {
@@ -63,6 +61,8 @@ export function App() {
   }, [isAdminToolsOpen, permissions.mayManageUsers]);
 
   const documentFolders = buildSidebarFolders(data.documents, state.draft);
+  const activeMainView: MainView =
+    state.activeTabView === "tickets" ? "tickets" : "document";
   const linkedDocuments = data.documents
     .filter(
       (document) =>
@@ -79,7 +79,6 @@ export function App() {
   };
 
   async function handleCreateEntry(kind: DocumentKind) {
-    setActiveMainView("document");
     setIsAdminToolsOpen(false);
     const created = await actions.createEntry(kind);
 
@@ -89,7 +88,6 @@ export function App() {
   }
 
   function handleCreateTab() {
-    setActiveMainView("document");
     setIsAdminToolsOpen(false);
     actions.createTab();
     setShowSourceEditor(true);
@@ -100,17 +98,16 @@ export function App() {
   }
 
   function handleSelectDocument(documentId: string) {
-    setActiveMainView("document");
     actions.setSelectedDocumentId(documentId);
   }
 
   function handleQuickLinkSelect(linkId: QuickLinkId) {
     if (linkId === "tickets") {
-      setActiveMainView("tickets");
+      actions.openTicketsTab();
       return;
     }
 
-    setActiveMainView("document");
+    actions.focusDocumentTab();
   }
 
   return (
@@ -176,18 +173,12 @@ export function App() {
             onUserDelete={actions.deleteUser}
             onWorkspaceCreate={actions.createWorkspace}
           />
-        ) : activeMainView === "tickets" ? (
-          <TicketsWorkspaceView
-            documents={data.documents}
-            selectedWorkspace={data.selectedWorkspace}
-            tickets={data.tickets}
-            onCreateTab={handleCreateTab}
-            onDocumentSelect={handleSelectDocument}
-          />
         ) : (
           <DocumentWorkspace
             activeRole={data.activeRole}
+            activeTabView={state.activeTabView}
             documentState={state.documentState}
+            documents={data.documents}
             draft={state.draft}
             hasUnsavedChanges={state.hasUnsavedChanges}
             markdownBlockRenderers={data.markdownBlockRenderers}
@@ -204,6 +195,7 @@ export function App() {
             mayManageUsers={permissions.mayManageUsers}
             onCreateTab={handleCreateTab}
             onDraftChange={actions.updateDraft}
+            onDocumentSelect={handleSelectDocument}
             onOpenAdminTools={handleOpenAdminTools}
             onSaveDocument={() => void actions.saveDocument()}
             onShowSourceEditorChange={setShowSourceEditor}

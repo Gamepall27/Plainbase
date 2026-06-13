@@ -20,14 +20,15 @@ import {
 } from "@plainbase/shared";
 import { AddonRegistry } from "../addons/addon-registry";
 import { apiClient } from "../api/client";
-import type { LoadState, SaveState, WorkspaceTab } from "../app/types";
+import type {
+  LoadState,
+  SaveState,
+  WorkspaceTab,
+  WorkspaceTabView
+} from "../app/types";
 import type { EditorDraft } from "../editor/types";
 import { getErrorMessage } from "../lib/app-errors";
-import {
-  createEmptyDraft,
-  mapDocumentToDraft,
-  slugify
-} from "../lib/document-draft";
+import { mapDocumentToDraft, slugify } from "../lib/document-draft";
 
 export function useWorkspaceApp() {
   const [workspacesState, setWorkspacesState] = useState<LoadState<Workspace[]>>({
@@ -449,7 +450,7 @@ export function useWorkspaceApp() {
   async function saveDocument() {
     const activeTab = getActiveTab(openTabsRef.current, activeTabIdRef.current);
 
-    if (!activeTab || !selectedWorkspaceId) {
+    if (!activeTab || !activeTab.draft || !selectedWorkspaceId) {
       return;
     }
 
@@ -498,7 +499,7 @@ export function useWorkspaceApp() {
   function updateDraft(nextDraft: EditorDraft) {
     const activeTab = getActiveTab(openTabsRef.current, activeTabIdRef.current);
 
-    if (!activeTab) {
+    if (!activeTab || !activeTab.draft) {
       return;
     }
 
@@ -824,9 +825,12 @@ export function useWorkspaceApp() {
   const addonRegistry =
     addonRegistryState.status === "success" ? addonRegistryState.data : null;
   const activeTab = getActiveTab(openTabs, activeTabId);
-  const selectedDocumentId = activeTab?.documentId ?? null;
-  const draft = activeTab?.draft ?? null;
-  const hasUnsavedChanges = activeTab?.isDirty ?? false;
+  const activeTabView = activeTab?.view ?? "empty";
+  const selectedDocumentId =
+    activeTab?.view === "document" ? activeTab.documentId ?? null : null;
+  const draft = activeTab?.view === "document" ? activeTab.draft : null;
+  const hasUnsavedChanges =
+    activeTab?.view === "document" ? activeTab.isDirty : false;
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null;
   const selectedDocument =
@@ -842,8 +846,19 @@ export function useWorkspaceApp() {
   const tabs: WorkspaceTab[] = openTabs.map((tab) => ({
     id: tab.id,
     documentId: tab.documentId,
-    kind: tab.draft.kind,
-    title: tab.draft.title.trim() || "Neues Objekt",
+    kind:
+      tab.view === "tickets"
+        ? "tickets"
+        : tab.draft?.kind ??
+          documents.find((document) => document.id === tab.documentId)?.kind ??
+          "document",
+    view: tab.view,
+    title:
+      tab.view === "tickets"
+        ? "Tickets"
+        : tab.draft?.title.trim() ||
+          documents.find((document) => document.id === tab.documentId)?.title ||
+          "Neuer Tab",
     isActive: tab.id === activeTabId,
     isDirty: tab.isDirty
   }));
@@ -861,6 +876,7 @@ export function useWorkspaceApp() {
       usersState,
       selectedWorkspaceId,
       activeTabId,
+      activeTabView,
       selectedDocumentId,
       tabs,
       draft,
@@ -899,6 +915,8 @@ export function useWorkspaceApp() {
       setSelectedWorkspaceId,
       setSelectedDocumentId,
       createTab,
+      openTicketsTab,
+      focusDocumentTab,
       setActiveTabId: setTabActive,
       closeTab,
       signIn,
@@ -923,7 +941,47 @@ export function useWorkspaceApp() {
       return;
     }
 
-    const nextTab = createDraftTab(selectedWorkspaceId);
+    const nextTab = createBlankTab(selectedWorkspaceId);
+    updateTabs([...openTabsRef.current, nextTab], nextTab.id);
+    setSaveState({ status: "idle" });
+  }
+
+  function openTicketsTab() {
+    const existingTicketsTab = openTabsRef.current.find(
+      (tab) => tab.view === "tickets"
+    );
+
+    if (existingTicketsTab) {
+      updateTabs(openTabsRef.current, existingTicketsTab.id);
+      setSaveState({ status: "idle" });
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const nextTab = createTicketsTab(selectedWorkspaceId);
+    updateTabs([...openTabsRef.current, nextTab], nextTab.id);
+    setSaveState({ status: "idle" });
+  }
+
+  function focusDocumentTab() {
+    const existingDocumentTab = openTabsRef.current.find(
+      (tab) => tab.view !== "tickets"
+    );
+
+    if (existingDocumentTab) {
+      updateTabs(openTabsRef.current, existingDocumentTab.id);
+      setSaveState({ status: "idle" });
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const nextTab = createBlankTab(selectedWorkspaceId);
     updateTabs([...openTabsRef.current, nextTab], nextTab.id);
     setSaveState({ status: "idle" });
   }
@@ -963,6 +1021,27 @@ export function useWorkspaceApp() {
 
     if (existingTab) {
       updateTabs(openTabsRef.current, existingTab.id);
+      return;
+    }
+
+    const activeTab = getActiveTab(openTabsRef.current, activeTabIdRef.current);
+
+    if (activeTab && activeTab.view === "empty") {
+      updateTabs(
+        openTabsRef.current.map((tab) =>
+          tab.id === activeTab.id
+            ? {
+                ...tab,
+                view: "document",
+                workspaceId: document.workspaceId,
+                documentId: document.id,
+                draft: mapDocumentToDraft(document),
+                isDirty: false
+              }
+            : tab
+        ),
+        activeTab.id
+      );
       return;
     }
 
@@ -1033,8 +1112,10 @@ export function useWorkspaceApp() {
 
 type EditorTabState = {
   id: string;
+  view: WorkspaceTabView;
+  workspaceId: string;
   documentId: string | null;
-  draft: EditorDraft;
+  draft: EditorDraft | null;
   isDirty: boolean;
 };
 
@@ -1126,25 +1207,38 @@ function getSiblingDocuments(documents: Document[], parentId: string | null) {
 function createDocumentTab(document: Document): EditorTabState {
   return {
     id: createTabId(),
+    view: "document",
+    workspaceId: document.workspaceId,
     documentId: document.id,
     draft: mapDocumentToDraft(document),
     isDirty: false
   };
 }
 
-function createDraftTab(workspaceId: string): EditorTabState {
+function createBlankTab(workspaceId: string): EditorTabState {
   return {
     id: createTabId(),
+    view: "empty",
+    workspaceId,
     documentId: null,
-    draft: createEmptyDraft(workspaceId),
+    draft: null,
     isDirty: false
   };
 }
 
-function createInitialTabs(workspaceId: string, documents: Document[]) {
-  const firstDocument = documents.find((document) => document.kind !== "folder");
+function createTicketsTab(workspaceId: string): EditorTabState {
+  return {
+    id: createTabId(),
+    view: "tickets",
+    workspaceId,
+    documentId: null,
+    draft: null,
+    isDirty: false
+  };
+}
 
-  return firstDocument ? [createDocumentTab(firstDocument)] : [createDraftTab(workspaceId)];
+function createInitialTabs(workspaceId: string, _documents: Document[]) {
+  return [createBlankTab(workspaceId)];
 }
 
 function syncTabsForWorkspace(
@@ -1153,7 +1247,7 @@ function syncTabsForWorkspace(
   documents: Document[]
 ) {
   return tabs.flatMap((tab) => {
-    if (tab.draft.workspaceId !== workspaceId) {
+    if (tab.workspaceId !== workspaceId) {
       return [];
     }
 
@@ -1169,10 +1263,11 @@ function syncTabsForWorkspace(
       return [];
     }
 
-    if (tab.isDirty) {
+    if (tab.isDirty && tab.draft) {
       return [
         {
           ...tab,
+          workspaceId: matchingDocument.workspaceId,
           draft: {
             ...tab.draft,
             workspaceId: matchingDocument.workspaceId,
@@ -1186,6 +1281,7 @@ function syncTabsForWorkspace(
     return [
       {
         ...tab,
+        workspaceId: matchingDocument.workspaceId,
         draft: mapDocumentToDraft(matchingDocument)
       }
     ];

@@ -7,7 +7,12 @@ import type {
   User,
   Workspace
 } from "@plainbase/shared";
-import type { LoadState, SaveState, WorkspaceTab } from "../../app/types";
+import type {
+  LoadState,
+  SaveState,
+  WorkspaceTab,
+  WorkspaceTabView
+} from "../../app/types";
 import { countWords } from "../../lib/document-draft";
 import { formatTimestamp } from "../../lib/formatters";
 import {
@@ -23,6 +28,7 @@ import {
 } from "../DocumentEditorPane";
 import { EditorFormattingToolbar } from "../EditorFormattingToolbar";
 import { AnimatedCreateTabButton } from "../layout/AnimatedCreateTabButton";
+import { TicketsWorkspaceContent } from "../tickets/TicketsWorkspaceView";
 import {
   PreviewEditor,
   type PreviewEditorHandle
@@ -30,7 +36,9 @@ import {
 
 type DocumentWorkspaceProps = {
   activeRole: RoleName | null;
+  activeTabView: WorkspaceTabView;
   documentState: LoadState<Document> | null;
+  documents: Document[];
   draft: EditorDraft | null;
   hasUnsavedChanges: boolean;
   markdownBlockRenderers: MarkdownBlockRendererExtension<string>[];
@@ -47,6 +55,7 @@ type DocumentWorkspaceProps = {
   usersState: LoadState<User[]>;
   onCreateTab: () => void;
   onDraftChange: (draft: EditorDraft) => void;
+  onDocumentSelect: (documentId: string) => void;
   onOpenAdminTools: () => void;
   onSaveDocument: () => void;
   onShowSourceEditorChange: (show: boolean) => void;
@@ -56,7 +65,9 @@ type DocumentWorkspaceProps = {
 
 export function DocumentWorkspace({
   activeRole,
+  activeTabView,
   documentState,
+  documents,
   draft,
   hasUnsavedChanges,
   markdownBlockRenderers,
@@ -73,6 +84,7 @@ export function DocumentWorkspace({
   usersState,
   onCreateTab,
   onDraftChange,
+  onDocumentSelect,
   onOpenAdminTools,
   onSaveDocument,
   onShowSourceEditorChange,
@@ -83,11 +95,15 @@ export function DocumentWorkspace({
   const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
   const previousTabIdsRef = useRef<string[]>(tabs.map((tab) => tab.id));
   const enteringTimeoutRef = useRef<number | null>(null);
+  const closingTimeoutRef = useRef<number | null>(null);
   const wordCount = countWords(draft?.content ?? "");
+  const isTicketsTab = activeTabView === "tickets";
+  const isEmptyTab = activeTabView === "empty";
   const isKanbanBoard = selectedDocument?.kind === "kanban";
   const currentTabTitle =
-    draft?.title.trim() || selectedDocument?.title || "Neues Objekt";
+    draft?.title.trim() || selectedDocument?.title || "Neuer Tab";
   const [enteringTabId, setEnteringTabId] = useState<string | null>(null);
+  const [closingTabId, setClosingTabId] = useState<string | null>(null);
 
   useEffect(() => {
     const previousTabIds = previousTabIdsRef.current;
@@ -113,11 +129,32 @@ export function DocumentWorkspace({
       if (enteringTimeoutRef.current !== null) {
         window.clearTimeout(enteringTimeoutRef.current);
       }
+
+      if (closingTimeoutRef.current !== null) {
+        window.clearTimeout(closingTimeoutRef.current);
+      }
     };
   }, [tabs]);
 
   function applyFormatting(action: FormattingAction) {
     previewEditorRef.current?.applyFormatting(action);
+  }
+
+  function handleTabClose(tabId: string) {
+    if (closingTabId !== null) {
+      return;
+    }
+
+    setClosingTabId(tabId);
+
+    if (closingTimeoutRef.current !== null) {
+      window.clearTimeout(closingTimeoutRef.current);
+    }
+
+    closingTimeoutRef.current = window.setTimeout(() => {
+      onTabClose(tabId);
+      setClosingTabId(null);
+    }, 240);
   }
 
   return (
@@ -126,11 +163,12 @@ export function DocumentWorkspace({
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className={getDocumentTabClassName(tab, enteringTabId)}
+            className={getDocumentTabClassName(tab, enteringTabId, closingTabId)}
           >
             <button
               type="button"
               className="document-tab-trigger"
+              disabled={closingTabId === tab.id}
               onClick={() => onTabSelect(tab.id)}
             >
               {tab.isDirty && <span className="document-tab-dirty" aria-hidden="true" />}
@@ -140,7 +178,8 @@ export function DocumentWorkspace({
               type="button"
               className="document-tab-close"
               aria-label={`${tab.title} schliessen`}
-              onClick={() => onTabClose(tab.id)}
+              disabled={closingTabId === tab.id}
+              onClick={() => handleTabClose(tab.id)}
             >
               x
             </button>
@@ -149,7 +188,17 @@ export function DocumentWorkspace({
         <AnimatedCreateTabButton onCreateTab={onCreateTab} />
       </div>
 
-      <div className="document-shell">
+      {isEmptyTab ? (
+        <div className="document-shell document-shell-empty" />
+      ) : isTicketsTab ? (
+        <TicketsWorkspaceContent
+          documents={documents}
+          selectedWorkspace={selectedWorkspace}
+          tickets={tickets}
+          onDocumentSelect={onDocumentSelect}
+        />
+      ) : (
+        <div className="document-shell">
         <DocumentToolbar
           isKanbanBoard={isKanbanBoard}
           mayEditDocument={mayEditDocument}
@@ -264,12 +313,14 @@ export function DocumentWorkspace({
             />
           )}
 
-          <div className="document-tip">
-            <strong>Tipp:</strong>{" "}
-            {isKanbanBoard
-              ? "Das Board zeigt die aktuellen Workspace-Tickets gruppiert nach Status."
-              : "Nutze die Add-ons in der rechten Seitenleiste, um Tickets, Diagramme und mehr zu verwalten."}
-          </div>
+          {!isEmptyTab && (
+            <div className="document-tip">
+              <strong>Tipp:</strong>{" "}
+              {isKanbanBoard
+                ? "Das Board zeigt die aktuellen Workspace-Tickets gruppiert nach Status."
+                : "Nutze die Add-ons in der rechten Seitenleiste, um Tickets, Diagramme und mehr zu verwalten."}
+            </div>
+          )}
         </section>
 
         <div className="document-meta-bar">
@@ -304,20 +355,33 @@ export function DocumentWorkspace({
             />
           </div>
         )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
 
-function getDocumentTabClassName(tab: WorkspaceTab, enteringTabId: string | null) {
+function getDocumentTabClassName(
+  tab: WorkspaceTab,
+  enteringTabId: string | null,
+  closingTabId: string | null
+) {
   const classNames = ["document-tab"];
 
   if (tab.isActive) {
     classNames.push("active");
   }
 
+  if (tab.documentId === null) {
+    classNames.push("is-empty");
+  }
+
   if (tab.id === enteringTabId) {
     classNames.push("is-entering");
+  }
+
+  if (tab.id === closingTabId) {
+    classNames.push("is-closing");
   }
 
   return classNames.join(" ");

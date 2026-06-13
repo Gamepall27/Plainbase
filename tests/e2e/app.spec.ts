@@ -30,9 +30,12 @@ test("critical app shell flows render successfully", async ({ page }) => {
   await page.getByRole("button", { name: "Schliessen", exact: true }).click();
 
   await page.locator(".document-tabs").getByRole("button", { name: "Neuen Tab anlegen" }).click();
-  await expect(page.locator(".document-tab-title").filter({ hasText: "Neues Objekt" })).toBeVisible();
-  await page.getByRole("button", { name: "Neues Objekt schliessen" }).click();
-  await expect(page.getByRole("button", { name: "Neues Objekt schliessen" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Neuer Tab schliessen" })).toBeVisible();
+  await expect(page.locator(".document-shell-empty")).toBeVisible();
+  await expect(page.locator(".document-toolbar")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Kein Objekt geoeffnet" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Neuer Tab schliessen" }).click();
+  await expect(page.getByRole("button", { name: "Neuer Tab schliessen" })).toHaveCount(1);
 
   await page.locator(".left-sidebar").getByRole("button", { name: "Neues Objekt anlegen" }).click();
   await page.getByRole("menuitem", { name: "Kanban Board" }).click();

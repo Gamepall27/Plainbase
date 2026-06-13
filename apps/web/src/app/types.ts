@@ -40,11 +40,13 @@ export type QuickLinkId =
 export type TicketFilter = Ticket["status"];
 
 export type SelectedDocument = Document | null;
+export type WorkspaceTabView = "empty" | "document" | "tickets";
 
 export type WorkspaceTab = {
   id: string;
   documentId: string | null;
-  kind: DocumentKind;
+  kind: DocumentKind | "tickets";
+  view: WorkspaceTabView;
   title: string;
   isActive: boolean;
   isDirty: boolean;

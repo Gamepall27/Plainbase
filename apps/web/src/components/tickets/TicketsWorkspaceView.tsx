@@ -6,21 +6,19 @@ import {
 } from "../../lib/ticket-format";
 import { AnimatedCreateTabButton } from "../layout/AnimatedCreateTabButton";
 
-type TicketsWorkspaceViewProps = {
+type TicketsWorkspaceContentProps = {
   documents: Document[];
   selectedWorkspace: Workspace | null;
   tickets: Ticket[];
-  onCreateTab: () => void;
   onDocumentSelect: (documentId: string) => void;
 };
 
-export function TicketsWorkspaceView({
+export function TicketsWorkspaceContent({
   documents,
   selectedWorkspace,
   tickets,
-  onCreateTab,
   onDocumentSelect
-}: TicketsWorkspaceViewProps) {
+}: TicketsWorkspaceContentProps) {
   const documentsWithTickets = documents
     .filter((document) => document.kind !== "folder")
     .map((document) => ({
@@ -33,6 +31,113 @@ export function TicketsWorkspaceView({
   const openTickets = tickets.filter((ticket) => ticket.status !== "Done").length;
 
   return (
+    <div className="document-shell">
+      <section className="document-canvas ticket-overview-canvas">
+        <div className="document-preview-header">
+          <div>
+            <p className="canvas-eyebrow">
+              {selectedWorkspace?.name ?? "Workspace"}
+            </p>
+            <h1 className="canvas-title">Tickets</h1>
+            <p className="profile-dialog-copy ticket-overview-copy">
+              Alle aktuellen Dokumente mit verknuepften Tickets auf einen Blick.
+            </p>
+          </div>
+          <div className="ticket-overview-stats">
+            <span className="role-pill">{documentsWithTickets.length} Objekte</span>
+            <span className="unsaved-pill">{openTickets} offen</span>
+          </div>
+        </div>
+
+        <div className="ticket-overview-grid">
+          {documentsWithTickets.length === 0 && unlinkedTickets.length === 0 && (
+            <div className="empty-ticket-state">
+              Noch keine Tickets mit Dokumentbezug vorhanden.
+            </div>
+          )}
+
+          {documentsWithTickets.map(({ document, tickets: documentTickets }) => (
+            <article key={document.id} className="ticket-overview-card">
+              <div className="ticket-overview-card-head">
+                <div>
+                  <p className="canvas-eyebrow">
+                    {document.kind === "kanban" ? "Kanban Board" : "Dokument"}
+                  </p>
+                  <h3>{document.title}</h3>
+                </div>
+                <button
+                  type="button"
+                  className="inline-link-button"
+                  onClick={() => onDocumentSelect(document.id)}
+                >
+                  Oeffnen
+                </button>
+              </div>
+
+              <div className="ticket-overview-ticket-list">
+                {documentTickets.map((ticket) => (
+                  <div key={ticket.id} className="ticket-overview-ticket-row">
+                    <div>
+                      <strong>{ticket.title}</strong>
+                      <p>{ticket.description}</p>
+                    </div>
+                    <div className="ticket-overview-ticket-meta">
+                      <span className={getTicketStatusClassName(ticket.status)}>
+                        {formatTicketFilterLabel(ticket.status)}
+                      </span>
+                      <span>{formatTimestamp(ticket.updatedAt)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+
+          {unlinkedTickets.length > 0 && (
+            <article className="ticket-overview-card ticket-overview-card-muted">
+              <div className="ticket-overview-card-head">
+                <div>
+                  <p className="canvas-eyebrow">Ohne Dokument</p>
+                  <h3>Unzugeordnete Tickets</h3>
+                </div>
+              </div>
+
+              <div className="ticket-overview-ticket-list">
+                {unlinkedTickets.map((ticket) => (
+                  <div key={ticket.id} className="ticket-overview-ticket-row">
+                    <div>
+                      <strong>{ticket.title}</strong>
+                      <p>{ticket.description}</p>
+                    </div>
+                    <div className="ticket-overview-ticket-meta">
+                      <span className={getTicketStatusClassName(ticket.status)}>
+                        {formatTicketFilterLabel(ticket.status)}
+                      </span>
+                      <span>{formatTimestamp(ticket.updatedAt)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+type TicketsWorkspaceViewProps = TicketsWorkspaceContentProps & {
+  onCreateTab: () => void;
+};
+
+export function TicketsWorkspaceView({
+  documents,
+  selectedWorkspace,
+  tickets,
+  onCreateTab,
+  onDocumentSelect
+}: TicketsWorkspaceViewProps) {
+  return (
     <section className="main-stage">
       <div className="document-tabs">
         <button type="button" className="document-tab active">
@@ -41,98 +146,12 @@ export function TicketsWorkspaceView({
         <AnimatedCreateTabButton onCreateTab={onCreateTab} />
       </div>
 
-      <div className="document-shell">
-        <section className="document-canvas ticket-overview-canvas">
-          <div className="document-preview-header">
-            <div>
-              <p className="canvas-eyebrow">
-                {selectedWorkspace?.name ?? "Workspace"}
-              </p>
-              <h1 className="canvas-title">Tickets</h1>
-              <p className="profile-dialog-copy ticket-overview-copy">
-                Alle aktuellen Dokumente mit verknuepften Tickets auf einen Blick.
-              </p>
-            </div>
-            <div className="ticket-overview-stats">
-              <span className="role-pill">{documentsWithTickets.length} Objekte</span>
-              <span className="unsaved-pill">{openTickets} offen</span>
-            </div>
-          </div>
-
-          <div className="ticket-overview-grid">
-            {documentsWithTickets.length === 0 && unlinkedTickets.length === 0 && (
-              <div className="empty-ticket-state">
-                Noch keine Tickets mit Dokumentbezug vorhanden.
-              </div>
-            )}
-
-            {documentsWithTickets.map(({ document, tickets: documentTickets }) => (
-              <article key={document.id} className="ticket-overview-card">
-                <div className="ticket-overview-card-head">
-                  <div>
-                    <p className="canvas-eyebrow">
-                      {document.kind === "kanban" ? "Kanban Board" : "Dokument"}
-                    </p>
-                    <h3>{document.title}</h3>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-link-button"
-                    onClick={() => onDocumentSelect(document.id)}
-                  >
-                    Oeffnen
-                  </button>
-                </div>
-
-                <div className="ticket-overview-ticket-list">
-                  {documentTickets.map((ticket) => (
-                    <div key={ticket.id} className="ticket-overview-ticket-row">
-                      <div>
-                        <strong>{ticket.title}</strong>
-                        <p>{ticket.description}</p>
-                      </div>
-                      <div className="ticket-overview-ticket-meta">
-                        <span className={getTicketStatusClassName(ticket.status)}>
-                          {formatTicketFilterLabel(ticket.status)}
-                        </span>
-                        <span>{formatTimestamp(ticket.updatedAt)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-
-            {unlinkedTickets.length > 0 && (
-              <article className="ticket-overview-card ticket-overview-card-muted">
-                <div className="ticket-overview-card-head">
-                  <div>
-                    <p className="canvas-eyebrow">Ohne Dokument</p>
-                    <h3>Unzugeordnete Tickets</h3>
-                  </div>
-                </div>
-
-                <div className="ticket-overview-ticket-list">
-                  {unlinkedTickets.map((ticket) => (
-                    <div key={ticket.id} className="ticket-overview-ticket-row">
-                      <div>
-                        <strong>{ticket.title}</strong>
-                        <p>{ticket.description}</p>
-                      </div>
-                      <div className="ticket-overview-ticket-meta">
-                        <span className={getTicketStatusClassName(ticket.status)}>
-                          {formatTicketFilterLabel(ticket.status)}
-                        </span>
-                        <span>{formatTimestamp(ticket.updatedAt)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            )}
-          </div>
-        </section>
-      </div>
+      <TicketsWorkspaceContent
+        documents={documents}
+        selectedWorkspace={selectedWorkspace}
+        tickets={tickets}
+        onDocumentSelect={onDocumentSelect}
+      />
     </section>
   );
 }
