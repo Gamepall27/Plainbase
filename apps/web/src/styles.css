@@ -117,9 +117,11 @@ textarea:disabled {
 }
 
 .workspace-frame {
-  max-width: 1520px;
-  margin: 0 auto;
-  padding: 1rem;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
 }
 
 .app-topbar {
@@ -1979,21 +1981,22 @@ html[data-theme="dark"] .user-card-avatar {
 }
 
 .workspace-frame {
-  max-width: 1600px;
-  padding: 1.3rem;
+  width: 100%;
+  max-width: none;
+  padding: 0;
 }
 
 .app-topbar {
   position: relative;
   min-height: 80px;
   padding: 1rem 1.15rem;
-  border: 1px solid var(--window-stroke);
-  border-bottom-color: var(--border-soft);
-  border-radius: 28px 28px 0 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(242, 246, 252, 0.56));
   backdrop-filter: blur(28px) saturate(180%);
-  box-shadow: var(--shadow-window);
+  box-shadow: none;
 }
 
 .app-topbar > * {
@@ -2110,12 +2113,11 @@ html[data-theme="dark"] .user-card-avatar {
 }
 
 .workspace-layout {
-  border: 1px solid var(--window-stroke);
-  border-top: 0;
-  border-radius: 0 0 28px 28px;
+  border: 0;
+  border-radius: 0;
   background: var(--window-bg);
   backdrop-filter: blur(28px) saturate(180%);
-  box-shadow: var(--shadow-window);
+  box-shadow: none;
 }
 
 .left-sidebar {
