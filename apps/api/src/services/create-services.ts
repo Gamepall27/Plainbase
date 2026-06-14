@@ -53,10 +53,12 @@ export function createServices(
     authService: new AuthService(
       userRepository,
       tenantRepository,
+      workspaceRepository,
       roleRepository,
       authSessionRepository,
       passwordResetRepository,
-      userInvitationRepository
+      userInvitationRepository,
+      contentRoot
     ),
     roleService: new RoleService(roleRepository),
     addonService: new AddonService(addonRepository),

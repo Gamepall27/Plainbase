@@ -198,7 +198,14 @@ const addons: Addon[] = [
   }
 ];
 
-export function seedDatabase(database: DatabaseSync) {
+type SeedDatabaseOptions = {
+  includeDemoData: boolean;
+};
+
+export function seedDatabase(
+  database: DatabaseSync,
+  options: SeedDatabaseOptions
+) {
   const insertWorkspace = database.prepare(`
     INSERT INTO workspaces (id, tenant_id, name, slug, root_path, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -311,65 +318,12 @@ export function seedDatabase(database: DatabaseSync) {
   database.exec("BEGIN");
 
   try {
-    for (const tenant of tenants) {
-      insertTenant.run(
-        tenant.id,
-        tenant.name,
-        tenant.slug,
-        tenant.createdAt,
-        tenant.updatedAt
-      );
-    }
-
-    for (const workspace of workspaces) {
-      insertWorkspace.run(
-        workspace.id,
-        workspace.tenantId,
-        workspace.name,
-        workspace.slug,
-        workspace.rootPath,
-        workspace.createdAt,
-        workspace.updatedAt
-      );
-    }
-
     for (const role of roles) {
       insertRole.run(role.id, role.name);
     }
 
-    for (const user of users) {
-      insertUser.run(
-        user.id,
-        user.tenantId,
-        user.name,
-        user.username,
-        user.email,
-        hashPassword(defaultDemoPassword),
-        user.roleId,
-        user.avatarUrl
-      );
-    }
-
     for (const documentId of legacySeedDocumentIds) {
       deleteLegacyDocument.run(documentId);
-    }
-
-    for (const document of documents) {
-      insertDocument.run(
-        document.id,
-        document.workspaceId,
-        document.parentId,
-        document.kind,
-        document.sortOrder,
-        document.filePath ?? "",
-        document.title,
-        document.slug,
-        document.content,
-        document.createdAt,
-        document.updatedAt,
-        document.createdByUserId,
-        document.updatedByUserId
-      );
     }
 
     for (const addon of addons) {
@@ -383,19 +337,74 @@ export function seedDatabase(database: DatabaseSync) {
       );
     }
 
-    for (const ticket of tickets) {
-      insertTicket.run(
-        ticket.id,
-        ticket.workspaceId,
-        ticket.documentId,
-        ticket.title,
-        ticket.description,
-        ticket.status,
-        ticket.creatorId,
-        ticket.assigneeId,
-        ticket.createdAt,
-        ticket.updatedAt
-      );
+    if (options.includeDemoData) {
+      for (const tenant of tenants) {
+        insertTenant.run(
+          tenant.id,
+          tenant.name,
+          tenant.slug,
+          tenant.createdAt,
+          tenant.updatedAt
+        );
+      }
+
+      for (const workspace of workspaces) {
+        insertWorkspace.run(
+          workspace.id,
+          workspace.tenantId,
+          workspace.name,
+          workspace.slug,
+          workspace.rootPath,
+          workspace.createdAt,
+          workspace.updatedAt
+        );
+      }
+
+      for (const user of users) {
+        insertUser.run(
+          user.id,
+          user.tenantId,
+          user.name,
+          user.username,
+          user.email,
+          hashPassword(defaultDemoPassword),
+          user.roleId,
+          user.avatarUrl
+        );
+      }
+
+      for (const document of documents) {
+        insertDocument.run(
+          document.id,
+          document.workspaceId,
+          document.parentId,
+          document.kind,
+          document.sortOrder,
+          document.filePath ?? "",
+          document.title,
+          document.slug,
+          document.content,
+          document.createdAt,
+          document.updatedAt,
+          document.createdByUserId,
+          document.updatedByUserId
+        );
+      }
+
+      for (const ticket of tickets) {
+        insertTicket.run(
+          ticket.id,
+          ticket.workspaceId,
+          ticket.documentId,
+          ticket.title,
+          ticket.description,
+          ticket.status,
+          ticket.creatorId,
+          ticket.assigneeId,
+          ticket.createdAt,
+          ticket.updatedAt
+        );
+      }
     }
 
     database.exec("COMMIT");

@@ -372,6 +372,8 @@ textarea:disabled {
 
 .profile-dialog {
   width: min(640px, 100%);
+  max-height: calc(100vh - 2.5rem);
+  overflow: auto;
   padding: 1.35rem;
   border-radius: 26px;
   background:
@@ -617,6 +619,33 @@ html[data-theme="dark"] .settings-switch {
 html[data-theme="dark"] .settings-switch.is-on {
   background: #3b82f6;
   border-color: rgba(96, 165, 250, 0.35);
+}
+
+html[data-theme="dark"] .onboarding-guide-dialog {
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.12), transparent 24%),
+    rgba(15, 23, 42, 0.96);
+}
+
+html[data-theme="dark"] .onboarding-step {
+  background: rgba(30, 41, 59, 0.94);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .onboarding-guide-metrics span {
+  background: rgba(59, 130, 246, 0.18);
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .onboarding-step-badge {
+  background: rgba(34, 197, 94, 0.18);
+  color: #bbf7d0;
+}
+
+html[data-theme="dark"] .onboarding-step-note {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
 }
 
 html[data-theme="dark"] .topbar-role-badge,
@@ -1150,6 +1179,103 @@ html[data-theme="dark"] .user-card-avatar {
   grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   gap: 1rem;
   padding: 0 1rem 1rem;
+}
+
+.onboarding-guide {
+  display: contents;
+}
+
+.onboarding-guide-dialog,
+.onboarding-action-dialog {
+  width: min(720px, 100%);
+}
+
+.onboarding-guide-dialog {
+  background:
+    radial-gradient(circle at top right, rgba(47, 109, 246, 0.16), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(255, 195, 77, 0.18), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+}
+
+.onboarding-guide-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.onboarding-guide-copy h2,
+.onboarding-guide-copy p,
+.onboarding-step h3,
+.onboarding-step p {
+  margin: 0;
+}
+
+.onboarding-guide-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.onboarding-guide-metrics span {
+  display: inline-flex;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(47, 109, 246, 0.12);
+  color: #24427d;
+  font-size: 0.88rem;
+}
+
+.onboarding-guide-steps {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.onboarding-step {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(244, 247, 255, 0.92);
+  border: 1px solid rgba(23, 32, 58, 0.08);
+}
+
+.onboarding-step-complete {
+  box-shadow: 0 0 0 1px rgba(47, 109, 246, 0.16) inset;
+}
+
+.onboarding-step-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.onboarding-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.onboarding-step-badge,
+.onboarding-step-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  font-size: 0.92rem;
+}
+
+.onboarding-step-badge {
+  background: rgba(56, 189, 248, 0.16);
+  color: #0f5f86;
+}
+
+.onboarding-step-note {
+  background: rgba(15, 23, 42, 0.06);
+  color: #51607f;
+}
+
+.onboarding-guide-subdialog {
+  z-index: 41;
 }
 
 .document-tabs {

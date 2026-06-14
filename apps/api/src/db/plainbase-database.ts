@@ -20,9 +20,11 @@ export class PlainbaseDatabase {
     this.database = new DatabaseSync(databasePath);
   }
 
-  initialize() {
+  initialize(options?: { seedDemoData?: boolean }) {
     applySchema(this.database);
-    seedDatabase(this.database);
+    seedDatabase(this.database, {
+      includeDemoData: options?.seedDemoData ?? false
+    });
   }
 
   close() {

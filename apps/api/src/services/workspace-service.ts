@@ -5,7 +5,13 @@ import type { AuthContext } from "../auth/auth-context.js";
 import { requireAuthenticatedUser } from "../auth/auth-context.js";
 import { ApiError } from "../errors/api-error.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
-import { expectObject, readRequiredString, validateSlug } from "./validation.js";
+import {
+  expectObject,
+  readOptionalNullableString,
+  readRequiredString,
+  requireAtLeastOneField,
+  validateSlug
+} from "./validation.js";
 import {
   normalizeWorkspaceRootPath,
   resolveWorkspaceRootPath
@@ -29,7 +35,7 @@ export class WorkspaceService {
     const body = expectObject(input);
     const name = readRequiredString(body, "name", "Workspace name");
     const slug = readRequiredString(body, "slug", "Workspace slug");
-    const rootPathInput = readRequiredString(body, "rootPath", "Workspace path");
+    const rootPathInput = readOptionalNullableString(body, "rootPath", "Workspace path");
 
     validateSlug(slug);
 
@@ -39,8 +45,15 @@ export class WorkspaceService {
       });
     }
 
-    const rootPath = normalizeWorkspaceRootPath(rootPathInput);
-    const workspaceAtPath = this.workspaceRepository.findByRootPath(rootPath);
+    const rootPath = rootPathInput ? normalizeWorkspaceRootPath(rootPathInput) : "";
+    const resolvedRootPath = resolveWorkspaceRootPath(this.contentRoot, {
+      slug,
+      rootPath
+    });
+    const workspaceAtPath = this.workspaceRepository
+      .list()
+      .map((workspace) => this.hydrateWorkspace(workspace))
+      .find((workspace) => workspace.rootPath === resolvedRootPath);
 
     if (workspaceAtPath) {
       throw new ApiError(409, "CONFLICT", "Workspace path already exists.", {
@@ -48,7 +61,7 @@ export class WorkspaceService {
       });
     }
 
-    mkdirSync(rootPath, { recursive: true });
+    mkdirSync(resolvedRootPath, { recursive: true });
 
     const timestamp = new Date().toISOString();
 
@@ -63,6 +76,67 @@ export class WorkspaceService {
         updatedAt: timestamp
       } satisfies Workspace)
     );
+  }
+
+  updateWorkspace(workspaceId: string, input: unknown, actor: AuthContext) {
+    const existingWorkspace = this.requireTenantWorkspace(workspaceId, actor);
+    const body = expectObject(input);
+
+    requireAtLeastOneField(
+      body,
+      ["rootPath"],
+      "At least one workspace field must be provided."
+    );
+
+    const rootPathInput = readOptionalNullableString(body, "rootPath", "Workspace path");
+    const nextStoredRootPath =
+      rootPathInput === undefined
+        ? existingWorkspace.rootPath
+        : rootPathInput
+          ? normalizeWorkspaceRootPath(rootPathInput)
+          : "";
+    const nextResolvedRootPath = resolveWorkspaceRootPath(this.contentRoot, {
+      slug: existingWorkspace.slug,
+      rootPath: nextStoredRootPath
+    });
+    const workspaceAtPath = this.workspaceRepository
+      .list()
+      .filter((workspace) => workspace.id !== existingWorkspace.id)
+      .map((workspace) => this.hydrateWorkspace(workspace))
+      .find((workspace) => workspace.rootPath === nextResolvedRootPath);
+
+    if (workspaceAtPath) {
+      throw new ApiError(409, "CONFLICT", "Workspace path already exists.", {
+        rootPath: "Choose a different workspace path."
+      });
+    }
+
+    mkdirSync(nextResolvedRootPath, { recursive: true });
+
+    return this.workspaceRepository.update(
+      this.hydrateWorkspace({
+        ...existingWorkspace,
+        rootPath: nextStoredRootPath,
+        updatedAt: new Date().toISOString()
+      })
+    );
+  }
+
+  deleteWorkspace(workspaceId: string, actor: AuthContext) {
+    const existingWorkspace = this.requireTenantWorkspace(workspaceId, actor);
+    this.workspaceRepository.delete(existingWorkspace.id);
+    return existingWorkspace.id;
+  }
+
+  private requireTenantWorkspace(workspaceId: string, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
+    const workspace = this.workspaceRepository.findById(workspaceId);
+
+    if (!workspace || workspace.tenantId !== authenticatedUser.tenant.id) {
+      throw new ApiError(404, "NOT_FOUND", "Workspace not found.");
+    }
+
+    return workspace;
   }
 
   private hydrateWorkspace(workspace: Workspace) {

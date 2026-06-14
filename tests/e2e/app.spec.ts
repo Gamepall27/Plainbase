@@ -1,19 +1,31 @@
 import { test, expect } from "@playwright/test";
 
-test("critical app shell flows render successfully", async ({ page }) => {
+test("self-serve setup and critical app shell flows render successfully", async ({ page }) => {
   await page.goto("/");
-  await page.request.post("/api/auth/sign-out");
-  await page.reload();
 
   await expect(page.getByText("Plainbase")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plainbase einrichten" })).toBeVisible();
+  await page.getByPlaceholder("Firmenname").fill("Northwind Labs");
+  await page.getByPlaceholder("Workspace-Name").fill("Operations");
+  await page.getByPlaceholder("Admin-Name").fill("Nora Admin");
+  await page.getByPlaceholder("Admin-Benutzername").fill("nora");
+  await page.getByPlaceholder("Admin-E-Mail").fill("nora@northwind.test");
+  await page.locator('input[placeholder="Passwort"]').fill("northwind123");
+  await page.getByPlaceholder("Passwort bestaetigen").fill("northwind123");
+  await page.getByRole("button", { name: "Erstinstallation abschliessen" }).click();
+
   await expect(page.locator(".left-sidebar")).toContainText("Alle Dokumente");
+  await expect(page.getByRole("heading", { name: "Livegang vorbereiten" })).toBeVisible();
+  await page.getByRole("button", { name: "Team einladen" }).click();
+  const inviteDialog = page.getByRole("dialog", { name: "Teammitglied einladen" });
+  await expect(inviteDialog).toBeVisible();
+  await inviteDialog.getByPlaceholder("Name", { exact: true }).fill("Nils Viewer");
+  await inviteDialog.getByPlaceholder("Benutzername").fill("nils");
+  await inviteDialog.getByPlaceholder("E-Mail").fill("nils@northwind.test");
+  await inviteDialog.getByRole("button", { name: "Einladung erstellen" }).click();
+  await expect(page.getByRole("heading", { name: "Livegang vorbereiten" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Anmelden oder Profilmenue oeffnen" }).click();
-  await page.getByPlaceholder("E-Mail oder Benutzername").fill("editor");
-  await page.getByPlaceholder("Passwort").fill("plainbase123");
-  await page.getByRole("button", { name: "Anmelden", exact: true }).click();
-
-  const profileButton = page.getByRole("button", { name: /oeffnet Kontomenue/i });
+  const profileButton = page.getByRole("button", { name: /Nora Admin oeffnet Kontomenue/i });
   await expect(profileButton).toBeVisible();
   await profileButton.click();
 

@@ -35,6 +35,7 @@ const child = spawn(
       HOST: "127.0.0.1",
       PLAINBASE_API_PORT: "3101",
       PLAINBASE_WEB_PORT: "4173",
+      PLAINBASE_ENABLE_DEMO_SEED: "false",
       PLAINBASE_DB_PATH: e2eDatabasePath,
       PLAINBASE_CONTENT_ROOT: e2eContentRoot
     }

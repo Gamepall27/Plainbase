@@ -185,7 +185,7 @@ export type ApiSuccessResponse<T> = {
 export type CreateWorkspaceRequest = {
   name: string;
   slug: string;
-  rootPath: string;
+  rootPath?: string | null;
 };
 
 export type WorkspacesResponse = ApiSuccessResponse<{
@@ -194,6 +194,14 @@ export type WorkspacesResponse = ApiSuccessResponse<{
 
 export type WorkspaceResponse = ApiSuccessResponse<{
   workspace: Workspace;
+}>;
+
+export type UpdateWorkspaceRequest = {
+  rootPath?: string | null;
+};
+
+export type DeleteWorkspaceResponse = ApiSuccessResponse<{
+  deletedWorkspaceId: string;
 }>;
 
 export type CreateDocumentRequest = {
@@ -280,9 +288,10 @@ export type DeleteUserResponse = ApiSuccessResponse<{
 }>;
 
 export type DemoUserResponse = ApiSuccessResponse<DemoAuth>;
+export type DeliveryMethod = "manual_link";
 export type PasswordResetRequestResponse = ApiSuccessResponse<{
   accepted: true;
-  deliveryMethod: "manual_link";
+  deliveryMethod: DeliveryMethod;
   resetUrl: string | null;
 }>;
 
@@ -336,6 +345,69 @@ export type AcceptInvitationRequest = {
   token: string;
   password: string;
 };
+
+export type BootstrapInstallationRequest = {
+  tenantName: string;
+  tenantSlug: string;
+  workspaceName: string;
+  workspaceSlug: string;
+  workspaceRootPath?: string | null;
+  adminName: string;
+  adminUsername: string;
+  adminEmail: string;
+  password: string;
+};
+
+export type OnboardingState =
+  | {
+      state: "bootstrap_required";
+      deliveryMethod: DeliveryMethod;
+      tenant: null;
+      canManageUsers: false;
+      workspaceCount: 0;
+      userCount: 0;
+      pendingInvitationCount: 0;
+      steps: Array<{
+        id: "create_first_admin" | "create_first_workspace" | "invite_teammates";
+        title: string;
+        description: string;
+        completed: boolean;
+      }>;
+    }
+  | {
+      state: "onboarding";
+      deliveryMethod: DeliveryMethod;
+      tenant: Tenant;
+      canManageUsers: boolean;
+      workspaceCount: number;
+      userCount: number;
+      pendingInvitationCount: number;
+      steps: Array<{
+        id: "create_first_admin" | "create_first_workspace" | "invite_teammates";
+        title: string;
+        description: string;
+        completed: boolean;
+      }>;
+    }
+  | {
+      state: "ready";
+      deliveryMethod: DeliveryMethod;
+      tenant: Tenant;
+      canManageUsers: boolean;
+      workspaceCount: number;
+      userCount: number;
+      pendingInvitationCount: number;
+      steps: Array<{
+        id: "create_first_admin" | "create_first_workspace" | "invite_teammates";
+        title: string;
+        description: string;
+        completed: boolean;
+      }>;
+    };
+
+export type OnboardingResponse = ApiSuccessResponse<{
+  onboarding: OnboardingState;
+}>;
 
 export type RolesResponse = ApiSuccessResponse<{
   roles: Role[];

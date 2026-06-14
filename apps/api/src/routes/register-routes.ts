@@ -35,7 +35,10 @@ export function registerRoutes(app: Express, dependencies: ApiDependencies) {
     })
   );
   app.use("/api", createAuthRoutes(services.authService));
-  app.use("/api", createWorkspaceRoutes(services.workspaceService));
+  app.use(
+    "/api",
+    createWorkspaceRoutes(services.workspaceService, services.documentService)
+  );
   app.use("/api", createDocumentRoutes(services.documentService));
   app.use("/api", createUserRoutes(services.userService, services.authService));
   app.use("/api", createRoleRoutes(services.roleService));

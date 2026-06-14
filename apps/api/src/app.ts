@@ -8,6 +8,7 @@ import { registerRoutes } from "./routes/register-routes.js";
 type CreatePlainbaseApiAppOptions = {
   contentRoot?: string;
   databasePath?: string;
+  seedDemoData?: boolean;
 };
 
 export function createPlainbaseApiApp(
@@ -18,7 +19,7 @@ export function createPlainbaseApiApp(
     options.databasePath ?? apiConfig.databasePath
   );
 
-  database.initialize();
+  database.initialize({ seedDemoData: options.seedDemoData ?? apiConfig.enableDemoSeed });
 
   const app = express();
   app.use(cors());

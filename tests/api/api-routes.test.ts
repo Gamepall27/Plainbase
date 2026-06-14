@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -10,8 +10,11 @@ import type {
   ApiErrorResponse,
   ApiSuccessResponse,
   AuthState,
+  BootstrapInstallationRequest,
+  DeleteWorkspaceResponse,
   Document,
   Invitation,
+  OnboardingState,
   Ticket,
   User,
   Workspace
@@ -21,7 +24,7 @@ import { createPlainbaseApiApp } from "../../apps/api/src/app.ts";
 type JsonResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 test("auth sign-in and sign-out lifecycle works with session cookies", async (t) => {
-  const harness = await createApiHarness(t);
+  const harness = await createApiHarness(t, { seedDemoData: true });
   const client = harness.createClient();
 
   const initialAuthResponse = await client.request<AuthState>("/auth/me");
@@ -77,7 +80,9 @@ test("auth sign-in and sign-out lifecycle works with session cookies", async (t)
 });
 
 test("API enforces permissions and supports workspace, document and ticket flows", async (t) => {
-  const { tempDir, createClient } = await createApiHarness(t);
+  const { tempDir, createClient } = await createApiHarness(t, {
+    seedDemoData: true
+  });
   const guestClient = createClient();
   const adminClient = createClient();
   const editorClient = createClient();
@@ -262,8 +267,216 @@ test("API enforces permissions and supports workspace, document and ticket flows
   assert.equal(ticketsResponse.status, 401);
 });
 
+test("workspace creation imports existing folder and markdown structure immediately", async (t) => {
+  const { tempDir, createClient, database } = await createApiHarness(t, {
+    seedDemoData: true
+  });
+  const adminClient = createClient();
+  const workspaceRoot = join(tempDir, "imported-workspace");
+  const handbookRoot = join(workspaceRoot, "Handbook");
+  const guidesRoot = join(handbookRoot, "Guides");
+
+  mkdirSync(guidesRoot, { recursive: true });
+  writeFileSync(join(workspaceRoot, "Welcome.md"), "# Welcome\n", "utf8");
+  writeFileSync(join(handbookRoot, "Intro.md"), "## Intro\n", "utf8");
+  writeFileSync(join(guidesRoot, "Deep Dive.kanban.md"), "## Board\n", "utf8");
+
+  await expectSuccessStatus(
+    adminClient.request<AuthState>("/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify({
+        identifier: "admin",
+        password: "plainbase123"
+      })
+    }),
+    200
+  );
+
+  const createdWorkspaceResponse = await adminClient.request<{ workspace: Workspace }>(
+    "/workspaces",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Imported Workspace",
+        slug: "imported-workspace",
+        rootPath: workspaceRoot
+      })
+    }
+  );
+  assert.equal(createdWorkspaceResponse.status, 201);
+  const workspace = expectSuccess(createdWorkspaceResponse.payload).data.workspace;
+
+  const importedDocuments = database
+    .getConnection()
+    .prepare(
+      `
+        SELECT
+          id,
+          title,
+          kind,
+          parent_id AS parentId,
+          file_path AS filePath
+        FROM documents
+        WHERE workspace_id = ?
+        ORDER BY file_path
+      `
+    )
+    .all(workspace.id) as Array<{
+    id: string;
+    title: string;
+    kind: Document["kind"];
+    parentId: string | null;
+    filePath: string;
+  }>;
+
+  assert.deepEqual(
+    importedDocuments.map((document) => ({
+      title: document.title,
+      kind: document.kind,
+      filePath: document.filePath
+    })),
+    [
+      {
+        title: "Handbook",
+        kind: "folder",
+        filePath: "Handbook"
+      },
+      {
+        title: "Guides",
+        kind: "folder",
+        filePath: "Handbook/Guides"
+      },
+      {
+        title: "Deep Dive",
+        kind: "kanban",
+        filePath: "Handbook/Guides/Deep Dive.kanban.md"
+      },
+      {
+        title: "Intro",
+        kind: "document",
+        filePath: "Handbook/Intro.md"
+      },
+      {
+        title: "Welcome",
+        kind: "document",
+        filePath: "Welcome.md"
+      }
+    ]
+  );
+
+  const handbookDocument = importedDocuments.find(
+    (document) => document.filePath === "Handbook"
+  );
+  const guidesDocument = importedDocuments.find(
+    (document) => document.filePath === "Handbook/Guides"
+  );
+  const introDocument = importedDocuments.find(
+    (document) => document.filePath === "Handbook/Intro.md"
+  );
+  const deepDiveDocument = importedDocuments.find(
+    (document) => document.filePath === "Handbook/Guides/Deep Dive.kanban.md"
+  );
+
+  assert.ok(handbookDocument);
+  assert.ok(guidesDocument);
+  assert.ok(introDocument);
+  assert.ok(deepDiveDocument);
+  assert.equal(guidesDocument.parentId, handbookDocument.id);
+  assert.equal(introDocument.parentId, handbookDocument.id);
+  assert.equal(deepDiveDocument.parentId, guidesDocument.id);
+});
+
+test("workspace path updates resync content and workspace deletion removes it from plainbase", async (t) => {
+  const { tempDir, createClient } = await createApiHarness(t, {
+    seedDemoData: true
+  });
+  const adminClient = createClient();
+  const initialWorkspaceRoot = join(tempDir, "workspace-initial");
+  const migratedWorkspaceRoot = join(tempDir, "workspace-migrated");
+
+  mkdirSync(initialWorkspaceRoot, { recursive: true });
+  mkdirSync(join(migratedWorkspaceRoot, "Projects"), { recursive: true });
+  writeFileSync(
+    join(migratedWorkspaceRoot, "Projects", "Migration Notes.md"),
+    "# Migration\n",
+    "utf8"
+  );
+
+  await expectSuccessStatus(
+    adminClient.request<AuthState>("/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify({
+        identifier: "admin",
+        password: "plainbase123"
+      })
+    }),
+    200
+  );
+
+  const createdWorkspaceResponse = await adminClient.request<{ workspace: Workspace }>(
+    "/workspaces",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Mutable Workspace",
+        slug: "mutable-workspace",
+        rootPath: initialWorkspaceRoot
+      })
+    }
+  );
+  assert.equal(createdWorkspaceResponse.status, 201);
+  const workspace = expectSuccess(createdWorkspaceResponse.payload).data.workspace;
+
+  const updatedWorkspaceResponse = await adminClient.request<{ workspace: Workspace }>(
+    `/workspaces/${workspace.id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        rootPath: migratedWorkspaceRoot
+      })
+    }
+  );
+  assert.equal(updatedWorkspaceResponse.status, 200);
+  const updatedWorkspace = expectSuccess(updatedWorkspaceResponse.payload).data.workspace;
+  assert.equal(updatedWorkspace.rootPath, migratedWorkspaceRoot);
+
+  const documentsResponse = await adminClient.request<{ documents: Document[] }>(
+    `/workspaces/${workspace.id}/documents`
+  );
+  assert.equal(documentsResponse.status, 200);
+  const documents = expectSuccess(documentsResponse.payload).data.documents;
+  assert.equal(
+    documents.some((document) => document.filePath === "Projects/Migration Notes.md"),
+    true
+  );
+
+  const deletedWorkspaceResponse = await adminClient.request<{
+    deletedWorkspaceId: string;
+  }>(`/workspaces/${workspace.id}`, {
+    method: "DELETE"
+  });
+  assert.equal(deletedWorkspaceResponse.status, 200);
+  const deletedWorkspacePayload = expectSuccess(deletedWorkspaceResponse.payload);
+  assert.equal(deletedWorkspacePayload.data.deletedWorkspaceId, workspace.id);
+
+  const workspacesResponse = await adminClient.request<{ workspaces: Workspace[] }>(
+    "/workspaces"
+  );
+  assert.equal(workspacesResponse.status, 200);
+  const remainingWorkspaces = expectSuccess(workspacesResponse.payload).data.workspaces;
+  assert.equal(
+    remainingWorkspaces.some((entry) => entry.id === workspace.id),
+    false
+  );
+
+  const deletedWorkspaceDocumentsResponse = await adminClient.request<{
+    documents: Document[];
+  }>(`/workspaces/${workspace.id}/documents`);
+  assert.equal(deletedWorkspaceDocumentsResponse.status, 404);
+});
+
 test("invitation acceptance and password reset flow works end to end", async (t) => {
-  const { createClient } = await createApiHarness(t);
+  const { createClient } = await createApiHarness(t, { seedDemoData: true });
   const adminClient = createClient();
   const inviteeClient = createClient();
 
@@ -393,7 +606,9 @@ test("invitation acceptance and password reset flow works end to end", async (t)
 });
 
 test("API isolates tenants across workspaces, users, documents and tickets", async (t) => {
-  const { tempDir, createClient } = await createApiHarness(t);
+  const { tempDir, createClient } = await createApiHarness(t, {
+    seedDemoData: true
+  });
   const demoAdminClient = createClient();
   const acmeAdminClient = createClient();
 
@@ -575,11 +790,88 @@ test("API isolates tenants across workspaces, users, documents and tickets", asy
   assert.equal(crossTenantAssignment.status, 404);
 });
 
-async function createApiHarness(t: TestContext) {
+test("bootstrap and onboarding flow works for a fresh installation", async (t) => {
+  const { createClient } = await createApiHarness(t, { seedDemoData: false });
+  const guestClient = createClient();
+
+  const initialOnboardingResponse = await guestClient.request<{
+    onboarding: OnboardingState;
+  }>("/auth/onboarding");
+  assert.equal(initialOnboardingResponse.status, 200);
+  const initialOnboarding = expectSuccess(initialOnboardingResponse.payload).data.onboarding;
+  assert.equal(initialOnboarding.state, "bootstrap_required");
+
+  const bootstrapPayload: BootstrapInstallationRequest = {
+    tenantName: "Northwind Labs",
+    tenantSlug: "northwind-labs",
+    workspaceName: "Operations",
+    workspaceSlug: "operations",
+    workspaceRootPath: null,
+    adminName: "Nora Admin",
+    adminUsername: "nora",
+    adminEmail: "nora@northwind.test",
+    password: "northwind123"
+  };
+
+  const bootstrapResponse = await guestClient.request<AuthState>("/auth/bootstrap", {
+    method: "POST",
+    body: JSON.stringify(bootstrapPayload)
+  });
+  assert.equal(bootstrapResponse.status, 201);
+  const bootstrapAuth = expectSuccess(bootstrapResponse.payload).data;
+  assert.equal(bootstrapAuth.authType, "session");
+
+  if (bootstrapAuth.authType !== "session") {
+    throw new Error("Expected bootstrap to sign in the first admin.");
+  }
+
+  assert.equal(bootstrapAuth.tenant.slug, "northwind-labs");
+  assert.equal(bootstrapAuth.user.username, "nora");
+
+  const duplicateBootstrapResponse = await guestClient.request<AuthState>(
+    "/auth/bootstrap",
+    {
+      method: "POST",
+      body: JSON.stringify(bootstrapPayload)
+    }
+  );
+  assert.equal(duplicateBootstrapResponse.status, 409);
+
+  const postBootstrapOnboardingResponse = await guestClient.request<{
+    onboarding: OnboardingState;
+  }>("/auth/onboarding");
+  assert.equal(postBootstrapOnboardingResponse.status, 200);
+  const postBootstrapOnboarding = expectSuccess(
+    postBootstrapOnboardingResponse.payload
+  ).data.onboarding;
+  assert.equal(postBootstrapOnboarding.state, "onboarding");
+  assert.equal(postBootstrapOnboarding.workspaceCount, 1);
+  assert.equal(postBootstrapOnboarding.userCount, 1);
+  assert.equal(postBootstrapOnboarding.pendingInvitationCount, 0);
+
+  const workspacesResponse = await guestClient.request<{ workspaces: Workspace[] }>(
+    "/workspaces"
+  );
+  assert.equal(workspacesResponse.status, 200);
+  const workspaces = expectSuccess(workspacesResponse.payload).data.workspaces;
+  assert.equal(workspaces.length, 1);
+  assert.equal(workspaces[0]?.slug, "operations");
+});
+
+async function createApiHarness(
+  t: TestContext,
+  options?: {
+    seedDemoData?: boolean;
+  }
+) {
   const tempDir = mkdtempSync(join(tmpdir(), "plainbase-api-test-"));
   const databasePath = join(tempDir, "plainbase.sqlite");
   const contentRoot = join(tempDir, "content");
-  const { app, database } = createPlainbaseApiApp({ databasePath, contentRoot });
+  const { app, database } = createPlainbaseApiApp({
+    databasePath,
+    contentRoot,
+    seedDemoData: options?.seedDemoData ?? true
+  });
   const server = createServer(app);
 
   await new Promise<void>((resolve) => {
@@ -599,6 +891,7 @@ async function createApiHarness(t: TestContext) {
 
   return {
     tempDir,
+    database,
     createClient: () => createCookieClient(baseUrl)
   };
 }

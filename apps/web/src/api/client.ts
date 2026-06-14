@@ -5,15 +5,18 @@ import type {
   AcceptInvitationRequest,
   AuthResponse,
   ApiErrorResponse,
+  BootstrapInstallationRequest,
   CreateInvitationRequest,
   CreateWorkspaceRequest,
   CreateUserRequest,
   CreateDocumentRequest,
   DeleteDocumentResponse,
+  DeleteWorkspaceResponse,
   DeleteUserResponse,
   DocumentResponse,
   DocumentsResponse,
   InvitationResponse,
+  OnboardingResponse,
   PasswordResetRequest,
   PasswordResetRequestResponse,
   ResetPasswordRequest,
@@ -25,6 +28,7 @@ import type {
   UsersResponse,
   TicketsResponse,
   UpdateDocumentRequest,
+  UpdateWorkspaceRequest,
   WorkspaceResponse,
   WorkspacesResponse
 } from "@plainbase/shared";
@@ -65,6 +69,16 @@ export const apiClient = {
       headers: jsonHeaders,
       body: JSON.stringify(payload)
     }).then((response) => response.data.workspace),
+  updateWorkspace: (workspaceId: string, payload: UpdateWorkspaceRequest) =>
+    request<WorkspaceResponse>(`/api/workspaces/${workspaceId}`, {
+      method: "PUT",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data.workspace),
+  deleteWorkspace: (workspaceId: string) =>
+    request<DeleteWorkspaceResponse>(`/api/workspaces/${workspaceId}`, {
+      method: "DELETE"
+    }).then((response) => response.data.deletedWorkspaceId),
   getDocuments: (workspaceId: string) =>
     request<DocumentsResponse>(`/api/workspaces/${workspaceId}/documents`).then(
       (response) => response.data.documents
@@ -97,6 +111,16 @@ export const apiClient = {
     }).then((response) => response.data.addon),
   getAuthState: () =>
     request<AuthResponse>("/api/auth/me").then((response) => response.data),
+  getOnboardingState: () =>
+    request<OnboardingResponse>("/api/auth/onboarding").then(
+      (response) => response.data.onboarding
+    ),
+  bootstrapInstallation: (payload: BootstrapInstallationRequest) =>
+    request<AuthResponse>("/api/auth/bootstrap", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data),
   signIn: (payload: SignInRequest) =>
     request<AuthResponse>("/api/auth/sign-in", {
       method: "POST",

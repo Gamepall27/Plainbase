@@ -1,9 +1,12 @@
+import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type {
   AcceptInvitationRequest,
   AuthResponse,
+  BootstrapInstallationRequest,
   CreateInvitationRequest,
   Invitation,
+  OnboardingState,
   PasswordResetRequest,
   PasswordResetRequestResponse,
   ResetPasswordResponse,
@@ -20,6 +23,7 @@ import { RoleRepository } from "../db/repositories/role-repository.js";
 import { TenantRepository } from "../db/repositories/tenant-repository.js";
 import { UserInvitationRepository } from "../db/repositories/user-invitation-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
+import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { ApiError } from "../errors/api-error.js";
 import {
   expectObject,
@@ -27,18 +31,105 @@ import {
   readRequiredString,
   validateEmail,
   validatePassword,
+  validateSlug,
   validateUsername
 } from "./validation.js";
+import {
+  normalizeWorkspaceRootPath,
+  resolveWorkspaceRootPath
+} from "../workspaces/workspace-paths.js";
 
 export class AuthService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly tenantRepository: TenantRepository,
+    private readonly workspaceRepository: WorkspaceRepository,
     private readonly roleRepository: RoleRepository,
     private readonly authSessionRepository: AuthSessionRepository,
     private readonly passwordResetRepository: PasswordResetRepository,
-    private readonly userInvitationRepository: UserInvitationRepository
+    private readonly userInvitationRepository: UserInvitationRepository,
+    private readonly contentRoot: string
   ) {}
+
+  getOnboardingState(actor: AuthContext): OnboardingState {
+    const users = this.userRepository.list();
+
+    if (users.length === 0 || this.tenantRepository.list().length === 0) {
+      return {
+        state: "bootstrap_required",
+        deliveryMethod: "manual_link",
+        tenant: null,
+        canManageUsers: false,
+        workspaceCount: 0,
+        userCount: 0,
+        pendingInvitationCount: 0,
+        steps: [
+          {
+            id: "create_first_admin",
+            title: "Ersten Admin anlegen",
+            description: "Richte dein erstes Administrationskonto ein.",
+            completed: false
+          },
+          {
+            id: "create_first_workspace",
+            title: "Erstes Workspace anlegen",
+            description: "Starte mit einem produktiven Workspace fuer dein Team.",
+            completed: false
+          },
+          {
+            id: "invite_teammates",
+            title: "Team einladen",
+            description: "Erzeuge Einladungslinks fuer weitere Mitarbeitende.",
+            completed: false
+          }
+        ]
+      };
+    }
+
+    if (actor.authType !== "session") {
+      return this.buildGuestOnboardingState();
+    }
+
+    const tenant = actor.tenant;
+    const workspaceCount = this.workspaceRepository.listByTenantId(tenant.id).length;
+    const userCount = this.userRepository.listByTenantId(tenant.id).length;
+    const pendingInvitationCount =
+      this.userInvitationRepository.countPendingByTenantId(tenant.id);
+    const canManageUsers = actor.role.name === "Admin";
+    const isReady =
+      workspaceCount > 0 && (userCount > 1 || pendingInvitationCount > 0);
+
+    return {
+      state: isReady ? "ready" : "onboarding",
+      deliveryMethod: "manual_link",
+      tenant,
+      canManageUsers,
+      workspaceCount,
+      userCount,
+      pendingInvitationCount,
+      steps: [
+        {
+          id: "create_first_admin",
+          title: "Erster Admin angelegt",
+          description: "Das erste Administrationskonto ist einsatzbereit.",
+          completed: true
+        },
+        {
+          id: "create_first_workspace",
+          title: "Workspace konfigurieren",
+          description: "Lege mindestens ein Workspace fuer echte Inhalte an.",
+          completed: workspaceCount > 0
+        },
+        {
+          id: "invite_teammates",
+          title: "Teammitglieder einladen",
+          description:
+            "Nutze Einladungslinks fuer weitere Mitarbeitende oder arbeite erstmal alleine weiter.",
+          completed: userCount > 1 || pendingInvitationCount > 0
+        }
+      ]
+    };
+  }
 
   getAuthState(sessionToken: string | null) {
     const now = new Date().toISOString();
@@ -80,6 +171,104 @@ export class AuthService {
     }
 
     return this.buildGuestAuthState();
+  }
+
+  bootstrapInstallation(input: unknown) {
+    if (this.userRepository.list().length > 0 || this.tenantRepository.list().length > 0) {
+      throw new ApiError(
+        409,
+        "CONFLICT",
+        "Die Erstinstallation wurde bereits abgeschlossen."
+      );
+    }
+
+    const body = expectObject(input);
+    const setup = this.parseBootstrapInput(body);
+
+    if (this.tenantRepository.findBySlug(setup.tenantSlug)) {
+      throw new ApiError(409, "CONFLICT", "Tenant slug already exists.", {
+        tenantSlug: "Choose a different tenant slug."
+      });
+    }
+
+    if (this.workspaceRepository.findBySlug(setup.workspaceSlug)) {
+      throw new ApiError(409, "CONFLICT", "Workspace slug already exists.", {
+        workspaceSlug: "Choose a different workspace slug."
+      });
+    }
+
+    if (this.userRepository.findByEmail(setup.adminEmail)) {
+      throw new ApiError(409, "CONFLICT", "A user with that email already exists.");
+    }
+
+    if (this.userRepository.findByUsername(setup.adminUsername)) {
+      throw new ApiError(409, "CONFLICT", "A user with that username already exists.");
+    }
+
+    const adminRole = this.roleRepository.findByName("Admin");
+
+    if (!adminRole) {
+      throw new ApiError(500, "INTERNAL_SERVER_ERROR", "Admin role not available.");
+    }
+
+    const timestamp = new Date().toISOString();
+    const tenant: Tenant = {
+      id: `tenant-${randomUUID()}`,
+      name: setup.tenantName,
+      slug: setup.tenantSlug,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    const storedWorkspaceRootPath = setup.workspaceRootPath
+      ? normalizeWorkspaceRootPath(setup.workspaceRootPath)
+      : "";
+    const resolvedWorkspaceRootPath = resolveWorkspaceRootPath(this.contentRoot, {
+      slug: setup.workspaceSlug,
+      rootPath: storedWorkspaceRootPath
+    });
+    const conflictingWorkspace = this.workspaceRepository
+      .list()
+      .map((workspace) => ({
+        ...workspace,
+        rootPath: resolveWorkspaceRootPath(this.contentRoot, workspace)
+      }))
+      .find((workspace) => workspace.rootPath === resolvedWorkspaceRootPath);
+
+    if (conflictingWorkspace) {
+      throw new ApiError(409, "CONFLICT", "Workspace path already exists.", {
+        workspaceRootPath: "Choose a different workspace path."
+      });
+    }
+
+    mkdirSync(resolvedWorkspaceRootPath, { recursive: true });
+
+    this.tenantRepository.create(tenant);
+    this.workspaceRepository.create({
+      id: `workspace-${randomUUID()}`,
+      tenantId: tenant.id,
+      name: setup.workspaceName,
+      slug: setup.workspaceSlug,
+      rootPath: storedWorkspaceRootPath,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    const createdUser = this.userRepository.create({
+      id: `user-${randomUUID()}`,
+      tenantId: tenant.id,
+      name: setup.adminName,
+      username: setup.adminUsername,
+      email: setup.adminEmail,
+      passwordHash: hashPassword(setup.password),
+      roleId: adminRole.id,
+      avatarUrl: null
+    });
+
+    if (!createdUser) {
+      throw new ApiError(500, "INTERNAL_SERVER_ERROR", "User creation failed.");
+    }
+
+    return this.createSessionForUser(createdUser.id);
   }
 
   requestPasswordReset(input: unknown) {
@@ -326,6 +515,38 @@ export class AuthService {
     } satisfies AuthResponse["data"];
   }
 
+  private buildGuestOnboardingState(): OnboardingState {
+    return {
+      state: "onboarding",
+      deliveryMethod: "manual_link",
+      tenant: null as never,
+      canManageUsers: false,
+      workspaceCount: 0,
+      userCount: 0,
+      pendingInvitationCount: 0,
+      steps: [
+        {
+          id: "create_first_admin",
+          title: "Anmelden",
+          description: "Melde dich mit einem Administrationskonto an.",
+          completed: false
+        },
+        {
+          id: "create_first_workspace",
+          title: "Workspace prüfen",
+          description: "Stelle sicher, dass dein erstes Workspace bereit ist.",
+          completed: false
+        },
+        {
+          id: "invite_teammates",
+          title: "Team einladen",
+          description: "Lege Einladungslinks fuer dein Team an.",
+          completed: false
+        }
+      ]
+    };
+  }
+
   private requireTenant(tenantId: string): Tenant {
     const tenant = this.tenantRepository.findById(tenantId);
 
@@ -354,6 +575,42 @@ export class AuthService {
       email,
       roleId,
       avatarUrl: avatarUrl ?? null
+    };
+  }
+
+  private parseBootstrapInput(
+    body: Record<string, unknown>
+  ): BootstrapInstallationRequest {
+    const tenantName = readRequiredString(body, "tenantName", "company name");
+    const tenantSlug = readRequiredString(body, "tenantSlug", "company slug").toLowerCase();
+    const workspaceName = readRequiredString(body, "workspaceName", "workspace name");
+    const workspaceSlug = readRequiredString(body, "workspaceSlug", "workspace slug").toLowerCase();
+    const workspaceRootPath = readOptionalNullableString(
+      body,
+      "workspaceRootPath",
+      "workspace root path"
+    );
+    const adminName = readRequiredString(body, "adminName", "admin name");
+    const adminUsername = readRequiredString(body, "adminUsername", "admin username").toLowerCase();
+    const adminEmail = readRequiredString(body, "adminEmail", "admin email").toLowerCase();
+    const password = readRequiredString(body, "password", "password");
+
+    validateSlug(tenantSlug, "tenantSlug");
+    validateSlug(workspaceSlug, "workspaceSlug");
+    validateUsername(adminUsername, "adminUsername");
+    validateEmail(adminEmail, "adminEmail");
+    validatePassword(password);
+
+    return {
+      tenantName,
+      tenantSlug,
+      workspaceName,
+      workspaceSlug,
+      workspaceRootPath: workspaceRootPath ?? null,
+      adminName,
+      adminUsername,
+      adminEmail,
+      password
     };
   }
 }

@@ -111,4 +111,39 @@ export class WorkspaceRepository {
 
     return workspace;
   }
+
+  update(workspace: Workspace) {
+    this.database
+      .prepare(
+        `
+          UPDATE workspaces
+          SET
+            name = ?,
+            slug = ?,
+            root_path = ?,
+            updated_at = ?
+          WHERE id = ?
+        `
+      )
+      .run(
+        workspace.name,
+        workspace.slug,
+        workspace.rootPath,
+        workspace.updatedAt,
+        workspace.id
+      );
+
+    return workspace;
+  }
+
+  delete(id: string) {
+    this.database
+      .prepare(
+        `
+          DELETE FROM workspaces
+          WHERE id = ?
+        `
+      )
+      .run(id);
+  }
 }

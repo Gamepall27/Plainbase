@@ -42,8 +42,15 @@ type AdminToolsPanelProps = {
   onWorkspaceCreate: (input: {
     name: string;
     slug: string;
-    rootPath: string;
+    rootPath?: string | null;
   }) => Promise<boolean>;
+  onWorkspaceDelete: (workspaceId: string) => Promise<boolean>;
+  onWorkspaceUpdate: (
+    workspaceId: string,
+    input: {
+      rootPath?: string | null;
+    }
+  ) => Promise<boolean>;
 };
 
 export function AdminToolsPanel({
@@ -60,7 +67,9 @@ export function AdminToolsPanel({
   onUserCreate,
   onUserUpdate,
   onUserDelete,
-  onWorkspaceCreate
+  onWorkspaceCreate,
+  onWorkspaceDelete,
+  onWorkspaceUpdate
 }: AdminToolsPanelProps) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [userFormState, setUserFormState] = useState({
@@ -76,6 +85,8 @@ export function AdminToolsPanel({
     slug: "",
     rootPath: ""
   });
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [workspacePathDraft, setWorkspacePathDraft] = useState("");
   const [inviteFormState, setInviteFormState] = useState({
     name: "",
     username: "",
@@ -84,6 +95,14 @@ export function AdminToolsPanel({
     avatarUrl: ""
   });
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
+
+  async function copyInvitationLink() {
+    if (!invitationLink) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(invitationLink);
+  }
 
   useEffect(() => {
     if (userFormState.roleId !== "" || roles.length === 0) {
@@ -202,6 +221,36 @@ export function AdminToolsPanel({
     });
   }
 
+  async function handleWorkspacePathUpdate(workspaceId: string) {
+    const success = await onWorkspaceUpdate(workspaceId, {
+      rootPath: workspacePathDraft.trim() || null
+    });
+
+    if (!success) {
+      return;
+    }
+
+    setEditingWorkspaceId(null);
+    setWorkspacePathDraft("");
+  }
+
+  async function handleWorkspaceDelete(workspace: Workspace) {
+    if (
+      !window.confirm(
+        `Workspace "${workspace.name}" aus Plainbase entfernen? Dateien auf dem Datentraeger bleiben erhalten.`
+      )
+    ) {
+      return;
+    }
+
+    const deleted = await onWorkspaceDelete(workspace.id);
+
+    if (deleted && editingWorkspaceId === workspace.id) {
+      setEditingWorkspaceId(null);
+      setWorkspacePathDraft("");
+    }
+  }
+
   async function handleDelete(user: User) {
     if (!window.confirm(`"${user.name}" wirklich entfernen?`)) {
       return;
@@ -239,8 +288,8 @@ export function AdminToolsPanel({
               <div>
                 <h3>Workspace anlegen</h3>
                 <p className="sidebar-copy">
-                  Beim Anlegen wird der angegebene Ordner direkt als echter Ursprung
-                  erstellt.
+                  Ohne Pfadangabe wird automatisch ein Ordner im konfigurierten
+                  Content-Root angelegt.
                 </p>
               </div>
             </div>
@@ -285,7 +334,7 @@ export function AdminToolsPanel({
               />
               <input
                 className="field"
-                placeholder="Pfad, z. B. /Users/joshua/Wissensbasis/Team-A"
+                placeholder="Pfad (optional), z. B. /Users/joshua/Wissensbasis/Team-A"
                 value={workspaceFormState.rootPath}
                 onChange={(event) =>
                   setWorkspaceFormState((current) => ({
@@ -300,8 +349,7 @@ export function AdminToolsPanel({
                 disabled={
                   workspaceMutationStatus.status === "saving" ||
                   workspaceFormState.name.trim() === "" ||
-                  workspaceFormState.slug.trim() === "" ||
-                  workspaceFormState.rootPath.trim() === ""
+                  workspaceFormState.slug.trim() === ""
                 }
               >
                 {workspaceMutationStatus.status === "saving"
@@ -349,7 +397,63 @@ export function AdminToolsPanel({
                     <div className="user-card-copy">
                       <strong>{workspace.name}</strong>
                       <span>{workspace.slug}</span>
-                      <span>{workspace.rootPath}</span>
+                      {editingWorkspaceId === workspace.id ? (
+                        <input
+                          className="field"
+                          value={workspacePathDraft}
+                          placeholder="Pfad leer lassen fuer Standardpfad"
+                          onChange={(event) => setWorkspacePathDraft(event.target.value)}
+                        />
+                      ) : (
+                        <span>{workspace.rootPath}</span>
+                      )}
+                    </div>
+                    <div className="user-card-actions">
+                      {editingWorkspaceId === workspace.id ? (
+                        <>
+                          <button
+                            type="button"
+                            className="inline-link-button"
+                            disabled={workspaceMutationStatus.status === "saving"}
+                            onClick={() => void handleWorkspacePathUpdate(workspace.id)}
+                          >
+                            Pfad speichern
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-link-button"
+                            disabled={workspaceMutationStatus.status === "saving"}
+                            onClick={() => {
+                              setEditingWorkspaceId(null);
+                              setWorkspacePathDraft("");
+                            }}
+                          >
+                            Abbrechen
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="inline-link-button"
+                            disabled={workspaceMutationStatus.status === "saving"}
+                            onClick={() => {
+                              setEditingWorkspaceId(workspace.id);
+                              setWorkspacePathDraft(workspace.rootPath);
+                            }}
+                          >
+                            Pfad anpassen
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-link-button user-remove-button"
+                            disabled={workspaceMutationStatus.status === "saving"}
+                            onClick={() => void handleWorkspaceDelete(workspace)}
+                          >
+                            Workspace loeschen
+                          </button>
+                        </>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -491,7 +595,8 @@ export function AdminToolsPanel({
                 <h3>Einladung erstellen</h3>
                 <p className="sidebar-copy">
                   Neue Nutzer erhalten einen einmaligen Link und setzen ihr Passwort
-                  selbst.
+                  selbst. Die Zustellung erfolgt aktuell per manuell teilbarem
+                  Einladungslink.
                 </p>
               </div>
             </div>
@@ -587,9 +692,18 @@ export function AdminToolsPanel({
               <p className="feedback success">{invitationMutationStatus.message}</p>
             )}
             {invitationLink && (
-              <p className="topbar-user-menu-helper">
-                Einladungslink: <a href={invitationLink}>{invitationLink}</a>
-              </p>
+              <div className="admin-link-actions">
+                <p className="topbar-user-menu-helper">
+                  Einladungslink: <a href={invitationLink}>{invitationLink}</a>
+                </p>
+                <button
+                  type="button"
+                  className="inline-link-button"
+                  onClick={() => void copyInvitationLink()}
+                >
+                  Link kopieren
+                </button>
+              </div>
             )}
           </section>
 
@@ -598,8 +712,7 @@ export function AdminToolsPanel({
               <div>
                 <h3>Nutzerverzeichnis</h3>
                 <p className="sidebar-copy">
-                  Seed-Konten: `admin`, `editor` oder `viewer` mit Passwort
-                  `plainbase123`.
+                  Verwalte hier alle Nutzer des aktuellen Kundenkontos.
                 </p>
               </div>
             </div>

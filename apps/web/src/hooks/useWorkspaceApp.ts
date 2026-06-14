@@ -4,6 +4,7 @@ import type {
   DemoAuth,
   Document,
   DocumentKind,
+  OnboardingState,
   Role,
   Ticket,
   User,
@@ -50,6 +51,11 @@ export function useWorkspaceApp() {
   const [demoUserState, setDemoUserState] = useState<LoadState<DemoAuth>>({
     status: "loading"
   });
+  const [onboardingState, setOnboardingState] = useState<
+    LoadState<OnboardingState>
+  >({
+    status: "loading"
+  });
   const [ticketsState, setTicketsState] = useState<LoadState<Ticket[]>>({
     status: "loading"
   });
@@ -63,6 +69,9 @@ export function useWorkspaceApp() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [roleSwitchStatus, setRoleSwitchStatus] = useState<SaveState>({
+    status: "idle"
+  });
+  const [setupStatus, setSetupStatus] = useState<SaveState>({
     status: "idle"
   });
   const [userMutationStatus, setUserMutationStatus] = useState<SaveState>({
@@ -137,10 +146,12 @@ export function useWorkspaceApp() {
   }, [selectedWorkspaceId]);
 
   async function loadShellData() {
-    const [addonsResult, rolesResult, authResult] = await Promise.allSettled([
+    const [addonsResult, rolesResult, authResult, onboardingResult] =
+      await Promise.allSettled([
       apiClient.getAddons(),
       apiClient.getRoles(),
-      apiClient.getAuthState()
+      apiClient.getAuthState(),
+      apiClient.getOnboardingState()
     ]);
 
     if (addonsResult.status === "fulfilled") {
@@ -168,6 +179,25 @@ export function useWorkspaceApp() {
         status: "error",
         message: getErrorMessage(authResult.reason)
       });
+      setWorkspacesState({ status: "success", data: [] });
+      setUsersState({ status: "success", data: [] });
+      setSelectedWorkspaceId(null);
+      return;
+    }
+
+    if (onboardingResult.status === "fulfilled") {
+      setOnboardingState({ status: "success", data: onboardingResult.value });
+    } else {
+      setOnboardingState({
+        status: "error",
+        message: getErrorMessage(onboardingResult.reason)
+      });
+    }
+
+    if (
+      onboardingResult.status === "fulfilled" &&
+      onboardingResult.value.state === "bootstrap_required"
+    ) {
       setWorkspacesState({ status: "success", data: [] });
       setUsersState({ status: "success", data: [] });
       setSelectedWorkspaceId(null);
@@ -208,6 +238,18 @@ export function useWorkspaceApp() {
       setUsersState({
         status: "error",
         message: getErrorMessage(usersResult.reason)
+      });
+    }
+  }
+
+  async function refreshOnboardingState() {
+    try {
+      const onboarding = await apiClient.getOnboardingState();
+      setOnboardingState({ status: "success", data: onboarding });
+    } catch (error) {
+      setOnboardingState({
+        status: "error",
+        message: getErrorMessage(error)
       });
     }
   }
@@ -308,6 +350,38 @@ export function useWorkspaceApp() {
         status: "error",
         message: getErrorMessage(error)
       });
+    }
+  }
+
+  async function bootstrapInstallation(input: {
+    tenantName: string;
+    tenantSlug: string;
+    workspaceName: string;
+    workspaceSlug: string;
+    workspaceRootPath?: string | null;
+    adminName: string;
+    adminUsername: string;
+    adminEmail: string;
+    password: string;
+  }) {
+    setSetupStatus({ status: "saving" });
+
+    try {
+      const authState = await apiClient.bootstrapInstallation(input);
+      setDemoUserState({ status: "success", data: authState });
+      await loadShellData();
+      setSetupStatus({
+        status: "success",
+        message:
+          "Erstinstallation abgeschlossen. Jetzt kannst du dein Team per Link einladen."
+      });
+      return true;
+    } catch (error) {
+      setSetupStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
     }
   }
 
@@ -745,6 +819,7 @@ export function useWorkspaceApp() {
         status: "success",
         message: `"${createdUser.name}" wurde angelegt.`
       });
+      await refreshOnboardingState();
       return true;
     } catch (error) {
       setUserMutationStatus({
@@ -791,6 +866,7 @@ export function useWorkspaceApp() {
         status: "success",
         message: `"${updatedUser.name}" wurde aktualisiert.`
       });
+      await refreshOnboardingState();
       return true;
     } catch (error) {
       setUserMutationStatus({
@@ -822,6 +898,7 @@ export function useWorkspaceApp() {
         status: "success",
         message: "Nutzer wurde entfernt."
       });
+      await refreshOnboardingState();
       return true;
     } catch (error) {
       setUserMutationStatus({
@@ -847,6 +924,7 @@ export function useWorkspaceApp() {
         status: "success",
         message: `Einladung fuer "${invitation.email}" wurde erstellt.`
       });
+      await refreshOnboardingState();
       return invitation.acceptUrl;
     } catch (error) {
       setInvitationMutationStatus({
@@ -860,7 +938,7 @@ export function useWorkspaceApp() {
   async function createWorkspace(input: {
     name: string;
     slug: string;
-    rootPath: string;
+    rootPath?: string | null;
   }) {
     setWorkspaceMutationStatus({ status: "saving" });
 
@@ -887,6 +965,97 @@ export function useWorkspaceApp() {
         status: "success",
         message: `Workspace "${createdWorkspace.name}" wurde angelegt.`
       });
+      await refreshOnboardingState();
+      return true;
+    } catch (error) {
+      setWorkspaceMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function updateWorkspace(
+    workspaceId: string,
+    input: {
+      rootPath?: string | null;
+    }
+  ) {
+    setWorkspaceMutationStatus({ status: "saving" });
+
+    try {
+      const updatedWorkspace = await apiClient.updateWorkspace(workspaceId, input);
+
+      setWorkspacesState((current) => {
+        if (current.status !== "success") {
+          return {
+            status: "success",
+            data: [updatedWorkspace]
+          };
+        }
+
+        return {
+          status: "success",
+          data: current.data
+            .map((workspace) =>
+              workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+            )
+            .sort((left, right) => left.name.localeCompare(right.name))
+        };
+      });
+
+      if (selectedWorkspaceId === updatedWorkspace.id) {
+        await loadWorkspaceData(updatedWorkspace.id);
+      }
+
+      setWorkspaceMutationStatus({
+        status: "success",
+        message: `Pfad fuer "${updatedWorkspace.name}" wurde aktualisiert.`
+      });
+      await refreshOnboardingState();
+      return true;
+    } catch (error) {
+      setWorkspaceMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function deleteWorkspace(workspaceId: string) {
+    setWorkspaceMutationStatus({ status: "saving" });
+
+    try {
+      const deletedWorkspaceId = await apiClient.deleteWorkspace(workspaceId);
+
+      setWorkspacesState((current) => {
+        if (current.status !== "success") {
+          return current;
+        }
+
+        const nextWorkspaces = current.data.filter(
+          (workspace) => workspace.id !== deletedWorkspaceId
+        );
+
+        setSelectedWorkspaceId((selected) =>
+          selected === deletedWorkspaceId ? nextWorkspaces[0]?.id ?? null : selected
+        );
+
+        return {
+          status: "success",
+          data: nextWorkspaces
+        };
+      });
+
+      closeTabsForWorkspace(deletedWorkspaceId);
+
+      setWorkspaceMutationStatus({
+        status: "success",
+        message: "Workspace wurde aus Plainbase entfernt."
+      });
+      await refreshOnboardingState();
       return true;
     } catch (error) {
       setWorkspaceMutationStatus({
@@ -959,6 +1128,7 @@ export function useWorkspaceApp() {
       rolesState,
       addonRegistryState,
       demoUserState,
+      onboardingState,
       ticketsState,
       usersState,
       selectedWorkspaceId,
@@ -970,6 +1140,7 @@ export function useWorkspaceApp() {
       hasUnsavedChanges,
       saveState,
       roleSwitchStatus,
+      setupStatus,
       userMutationStatus,
       invitationMutationStatus,
       workspaceMutationStatus,
@@ -983,6 +1154,7 @@ export function useWorkspaceApp() {
       roles: rolesState.status === "success" ? rolesState.data : [],
       tickets,
       users: usersState.status === "success" ? usersState.data : [],
+      onboarding: onboardingState.status === "success" ? onboardingState.data : null,
       selectedWorkspace,
       selectedDocument,
       activeAddonIds: addonRegistry?.getActiveAddonIds() ?? [],
@@ -1011,6 +1183,7 @@ export function useWorkspaceApp() {
       closeTab,
       signIn,
       signOut,
+      bootstrapInstallation,
       requestPasswordReset,
       resetPassword,
       acceptInvitation,
@@ -1025,7 +1198,9 @@ export function useWorkspaceApp() {
       createInvitation,
       updateUser,
       deleteUser,
-      createWorkspace
+      createWorkspace,
+      updateWorkspace,
+      deleteWorkspace
     }
   };
 
@@ -1070,11 +1245,9 @@ export function useWorkspaceApp() {
       return;
     }
 
-    if (!selectedWorkspaceId) {
-      return;
-    }
+    const targetWorkspaceId = selectedWorkspaceId ?? workspaces[0]?.id ?? null;
 
-    const nextTab = createAdminTab(selectedWorkspaceId);
+    const nextTab = createAdminTab(targetWorkspaceId);
     updateTabs([...openTabsRef.current, nextTab], nextTab.id);
     setSaveState({ status: "idle" });
   }
@@ -1125,6 +1298,15 @@ export function useWorkspaceApp() {
 
     updateTabs(nextTabs, nextActiveTabId);
     setSaveState({ status: "idle" });
+  }
+
+  function closeTabsForWorkspace(workspaceId: string) {
+    const nextTabs = openTabsRef.current.filter((tab) => tab.workspaceId !== workspaceId);
+    const nextActiveTabId = nextTabs.some((tab) => tab.id === activeTabIdRef.current)
+      ? activeTabIdRef.current
+      : nextTabs[0]?.id ?? null;
+
+    updateTabs(nextTabs, nextActiveTabId);
   }
 
   function activateDocument(document: Document) {
@@ -1270,7 +1452,7 @@ export function useWorkspaceApp() {
 type EditorTabState = {
   id: string;
   view: WorkspaceTabView;
-  workspaceId: string;
+  workspaceId: string | null;
   documentId: string | null;
   draft: EditorDraft | null;
   isDirty: boolean;
@@ -1394,7 +1576,7 @@ function createTicketsTab(workspaceId: string): EditorTabState {
   };
 }
 
-function createAdminTab(workspaceId: string): EditorTabState {
+function createAdminTab(workspaceId: string | null): EditorTabState {
   return {
     id: createTabId(),
     view: "admin",
@@ -1415,6 +1597,15 @@ function syncTabsForWorkspace(
   documents: Document[]
 ) {
   return tabs.flatMap((tab) => {
+    if (tab.view === "admin") {
+      return [
+        {
+          ...tab,
+          workspaceId: tab.workspaceId ?? workspaceId
+        }
+      ];
+    }
+
     if (tab.workspaceId !== workspaceId) {
       return [];
     }

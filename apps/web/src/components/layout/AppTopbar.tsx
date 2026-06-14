@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import type { DemoAuth, RoleName, Workspace } from "@plainbase/shared";
+import type {
+  DemoAuth,
+  OnboardingState,
+  RoleName,
+  Workspace
+} from "@plainbase/shared";
 import type { LoadState, SaveState } from "../../app/types";
 import { getInitials } from "../../lib/formatters";
 
 type AppTopbarProps = {
   activeRole: RoleName | null;
   demoUserState: LoadState<DemoAuth>;
+  onboardingState: LoadState<OnboardingState>;
   roleSwitchStatus: SaveState;
   selectedWorkspace: Workspace | null;
   onOpenSettings: () => void;
+  onOpenInitialSetup: () => void;
   onSignIn: (identifier: string, password: string) => Promise<boolean>;
   onRequestPasswordReset: (identifier: string) => Promise<string | null>;
   onSignOut: () => void;
@@ -17,9 +24,11 @@ type AppTopbarProps = {
 export function AppTopbar({
   activeRole,
   demoUserState,
+  onboardingState,
   roleSwitchStatus,
   selectedWorkspace,
   onOpenSettings,
+  onOpenInitialSetup,
   onSignIn,
   onRequestPasswordReset,
   onSignOut
@@ -36,6 +45,9 @@ export function AppTopbar({
   const auth = demoUserState.status === "success" ? demoUserState.data : null;
   const demoAuth = auth?.authType === "session" ? auth : null;
   const isDemoUser = demoAuth !== null;
+  const onboarding =
+    onboardingState.status === "success" ? onboardingState.data : null;
+  const requiresBootstrap = onboarding?.state === "bootstrap_required";
 
   useEffect(() => {
     if (!isUserMenuOpen) {
@@ -190,101 +202,118 @@ export function AppTopbar({
                   <>
                     <div className="topbar-user-menu-summary">
                       <span className="topbar-user-menu-eyebrow">
-                        {authMode === "sign-in" ? "Anmeldung" : "Passwort-Reset"}
+                        {requiresBootstrap
+                          ? "Erstinstallation"
+                          : authMode === "sign-in"
+                            ? "Anmeldung"
+                            : "Passwort-Reset"}
                       </span>
                       <strong>
-                        {authMode === "sign-in"
+                        {requiresBootstrap
+                          ? "Plainbase einrichten"
+                          : authMode === "sign-in"
                           ? "Willkommen zurueck"
                           : "Neues Passwort anfordern"}
                       </strong>
                       <span>
-                        {authMode === "sign-in"
+                        {requiresBootstrap
+                          ? "Lege dein erstes Admin-Konto und den ersten Workspace direkt im Browser an."
+                          : authMode === "sign-in"
                           ? "Melde dich mit E-Mail oder Benutzername an."
                           : "Wir erzeugen einen einmaligen Reset-Link fuer dein Konto."}
                       </span>
                     </div>
 
-                    <form
-                      className="topbar-login-form"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        if (authMode === "sign-in") {
-                          void handleSignInSubmit();
-                          return;
-                        }
-
-                        void handlePasswordResetSubmit();
-                      }}
-                    >
-                      <input
-                        className="field"
-                        placeholder="E-Mail oder Benutzername"
-                        value={loginForm.identifier}
-                        onChange={(event) =>
-                          setLoginForm((current) => ({
-                            ...current,
-                            identifier: event.target.value
-                          }))
-                        }
-                      />
-                      {authMode === "sign-in" && (
-                        <input
-                          className="field"
-                          type="password"
-                          placeholder="Passwort"
-                          value={loginForm.password}
-                          onChange={(event) =>
-                            setLoginForm((current) => ({
-                              ...current,
-                              password: event.target.value
-                            }))
-                          }
-                        />
-                      )}
+                    {requiresBootstrap ? (
                       <button
-                        type="submit"
+                        type="button"
                         className="toolbar-primary-button"
-                        disabled={
-                          roleSwitchStatus.status === "saving" ||
-                          loginForm.identifier.trim() === "" ||
-                          (authMode === "sign-in" &&
-                            loginForm.password.trim() === "")
-                        }
+                        onClick={onOpenInitialSetup}
                       >
-                        {roleSwitchStatus.status === "saving"
-                          ? authMode === "sign-in"
-                            ? "Anmeldung laeuft..."
-                            : "Link wird erstellt..."
-                          : authMode === "sign-in"
-                            ? "Anmelden"
-                            : "Reset-Link erstellen"}
+                        Erstinstallation starten
                       </button>
-                    </form>
+                    ) : null}
+                    {!requiresBootstrap && (
+                      <>
+                        <form
+                          className="topbar-login-form"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            if (authMode === "sign-in") {
+                              void handleSignInSubmit();
+                              return;
+                            }
 
-                    <button
-                      type="button"
-                      className="inline-link-button"
-                      onClick={() => {
-                        setAuthMode((current) =>
-                          current === "sign-in" ? "reset" : "sign-in"
-                        );
-                        setResetLink(null);
-                      }}
-                    >
-                      {authMode === "sign-in"
-                        ? "Passwort vergessen?"
-                        : "Zurueck zur Anmeldung"}
-                    </button>
+                            void handlePasswordResetSubmit();
+                          }}
+                        >
+                          <input
+                            className="field"
+                            placeholder="E-Mail oder Benutzername"
+                            value={loginForm.identifier}
+                            onChange={(event) =>
+                              setLoginForm((current) => ({
+                                ...current,
+                                identifier: event.target.value
+                              }))
+                            }
+                          />
+                          {authMode === "sign-in" && (
+                            <input
+                              className="field"
+                              type="password"
+                              placeholder="Passwort"
+                              value={loginForm.password}
+                              onChange={(event) =>
+                                setLoginForm((current) => ({
+                                  ...current,
+                                  password: event.target.value
+                                }))
+                              }
+                            />
+                          )}
+                          <button
+                            type="submit"
+                            className="toolbar-primary-button"
+                            disabled={
+                              roleSwitchStatus.status === "saving" ||
+                              loginForm.identifier.trim() === "" ||
+                              (authMode === "sign-in" &&
+                                loginForm.password.trim() === "")
+                            }
+                          >
+                            {roleSwitchStatus.status === "saving"
+                              ? authMode === "sign-in"
+                                ? "Anmeldung laeuft..."
+                                : "Link wird erstellt..."
+                              : authMode === "sign-in"
+                                ? "Anmelden"
+                                : "Reset-Link erstellen"}
+                          </button>
+                        </form>
 
-                    {resetLink && (
-                      <p className="topbar-user-menu-helper">
-                        Reset-Link: <a href={resetLink}>{resetLink}</a>
-                      </p>
+                        <button
+                          type="button"
+                          className="inline-link-button"
+                          onClick={() => {
+                            setAuthMode((current) =>
+                              current === "sign-in" ? "reset" : "sign-in"
+                            );
+                            setResetLink(null);
+                          }}
+                        >
+                          {authMode === "sign-in"
+                            ? "Passwort vergessen?"
+                            : "Zurueck zur Anmeldung"}
+                        </button>
+
+                        {resetLink && (
+                          <p className="topbar-user-menu-helper">
+                            Reset-Link: <a href={resetLink}>{resetLink}</a>
+                          </p>
+                        )}
+                      </>
                     )}
-                    <p className="topbar-user-menu-helper">
-                      Seed-Konten: `admin`, `editor` oder `viewer`
-                      mit Passwort `plainbase123`
-                    </p>
                     {roleSwitchStatus.status === "error" && (
                       <p className="feedback error">{roleSwitchStatus.message}</p>
                     )}

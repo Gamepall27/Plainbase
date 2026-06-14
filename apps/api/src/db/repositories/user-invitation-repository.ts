@@ -137,4 +137,19 @@ export class UserInvitationRepository {
       )
       .run(now);
   }
+
+  countPendingByTenantId(tenantId: string) {
+    const row = this.database
+      .prepare(
+        `
+          SELECT COUNT(*) AS total
+          FROM user_invitations
+          WHERE tenant_id = ?
+            AND accepted_at IS NULL
+        `
+      )
+      .get(tenantId) as { total: number } | undefined;
+
+    return row?.total ?? 0;
+  }
 }

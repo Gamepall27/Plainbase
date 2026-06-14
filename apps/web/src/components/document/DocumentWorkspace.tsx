@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MarkdownBlockRendererExtension } from "@plainbase/addon-sdk";
 import type {
   Document,
+  OnboardingState,
   Role,
   RoleName,
   Ticket,
@@ -30,6 +31,7 @@ import {
 import { EditorFormattingToolbar } from "../EditorFormattingToolbar";
 import { AdminToolsPanel } from "../admin/AdminToolsPanel";
 import { AnimatedCreateTabButton } from "../layout/AnimatedCreateTabButton";
+import { OnboardingGuide } from "../layout/OnboardingGuide";
 import { TicketsWorkspaceContent } from "../tickets/TicketsWorkspaceView";
 import {
   PreviewEditor,
@@ -46,6 +48,7 @@ type DocumentWorkspaceProps = {
   markdownBlockRenderers: MarkdownBlockRendererExtension<string>[];
   mayEditDocument: boolean;
   mayManageUsers: boolean;
+  onboarding: OnboardingState | null;
   invitationMutationStatus: SaveState;
   saveState: SaveState;
   roles: Role[];
@@ -99,8 +102,15 @@ type DocumentWorkspaceProps = {
   onWorkspaceCreate: (input: {
     name: string;
     slug: string;
-    rootPath: string;
+    rootPath?: string | null;
   }) => Promise<boolean>;
+  onWorkspaceDelete: (workspaceId: string) => Promise<boolean>;
+  onWorkspaceUpdate: (
+    workspaceId: string,
+    input: {
+      rootPath?: string | null;
+    }
+  ) => Promise<boolean>;
 };
 
 export function DocumentWorkspace({
@@ -113,6 +123,7 @@ export function DocumentWorkspace({
   markdownBlockRenderers,
   mayEditDocument,
   mayManageUsers,
+  onboarding,
   invitationMutationStatus,
   saveState,
   roles,
@@ -140,7 +151,9 @@ export function DocumentWorkspace({
   onUserCreate,
   onUserDelete,
   onUserUpdate,
-  onWorkspaceCreate
+  onWorkspaceCreate,
+  onWorkspaceDelete,
+  onWorkspaceUpdate
 }: DocumentWorkspaceProps) {
   const previewEditorRef = useRef<PreviewEditorHandle | null>(null);
   const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
@@ -240,6 +253,17 @@ export function DocumentWorkspace({
         <AnimatedCreateTabButton onCreateTab={onCreateTab} />
       </div>
 
+      {onboarding && (
+        <OnboardingGuide
+          invitationMutationStatus={invitationMutationStatus}
+          onboarding={onboarding}
+          roles={roles}
+          workspaceMutationStatus={workspaceMutationStatus}
+          onInvitationCreate={onInvitationCreate}
+          onWorkspaceCreate={onWorkspaceCreate}
+        />
+      )}
+
       {isAdminTab ? (
         <AdminToolsPanel
           roles={roles}
@@ -256,6 +280,8 @@ export function DocumentWorkspace({
           onUserUpdate={onUserUpdate}
           onUserDelete={onUserDelete}
           onWorkspaceCreate={onWorkspaceCreate}
+          onWorkspaceDelete={onWorkspaceDelete}
+          onWorkspaceUpdate={onWorkspaceUpdate}
         />
       ) : isEmptyTab ? (
         <div className="document-shell document-shell-empty" />

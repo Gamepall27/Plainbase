@@ -5,6 +5,7 @@ import type { RightPanelTab, TicketFilter } from "./app/types";
 import { DocumentWorkspace } from "./components/document/DocumentWorkspace";
 import { AuthActionDialog } from "./components/layout/AuthActionDialog";
 import { AppTopbar } from "./components/layout/AppTopbar";
+import { InitialSetupDialog } from "./components/layout/InitialSetupDialog";
 import { SettingsDialog } from "./components/layout/SettingsDialog";
 import { FeatureStrip } from "./components/layout/FeatureStrip";
 import { RightSidebar } from "./components/right-panel/RightSidebar";
@@ -39,6 +40,7 @@ export function App() {
   const [ticketFilter, setTicketFilter] = useState<TicketFilter>("Open");
   const [showSourceEditor, setShowSourceEditor] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInitialSetupOpen, setIsInitialSetupOpen] = useState(false);
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
     readSidebarWidth(leftSidebarStorageKey, leftSidebarDefaultWidth)
   );
@@ -94,6 +96,15 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      state.onboardingState.status === "success" &&
+      state.onboardingState.data.state === "bootstrap_required"
+    ) {
+      setIsInitialSetupOpen(true);
+    }
+  }, [state.onboardingState]);
+
   const documentFolders = buildSidebarFolders(data.documents, state.draft);
   const activeMainView: MainView =
     state.activeTabView === "tickets" ? "tickets" : "document";
@@ -123,10 +134,6 @@ export function App() {
   function handleCreateTab() {
     actions.createTab();
     setShowSourceEditor(true);
-  }
-
-  function handleOpenAdminTools() {
-    actions.openAdminTab();
   }
 
   function handleSelectDocument(documentId: string) {
@@ -207,9 +214,11 @@ export function App() {
       <AppTopbar
         activeRole={data.activeRole}
         demoUserState={state.demoUserState}
+        onboardingState={state.onboardingState}
         roleSwitchStatus={state.roleSwitchStatus}
         selectedWorkspace={data.selectedWorkspace}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenInitialSetup={() => setIsInitialSetupOpen(true)}
         onSignIn={(identifier, password) =>
           actions.signIn(identifier, password)
         }
@@ -253,7 +262,7 @@ export function App() {
             actions.openDocumentInNewTab(documentId)
           }
           onCreateEntry={(kind) => void handleCreateEntry(kind)}
-          onOpenAdminTools={handleOpenAdminTools}
+          onOpenAdminTools={actions.openAdminTab}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onQuickLinkSelect={handleQuickLinkSelect}
           onWorkspaceSelect={actions.setSelectedWorkspaceId}
@@ -278,6 +287,7 @@ export function App() {
           markdownBlockRenderers={data.markdownBlockRenderers}
           mayEditDocument={permissions.mayEditDocument}
           mayManageUsers={permissions.mayManageUsers}
+          onboarding={data.onboarding}
           roleSwitchStatus={state.roleSwitchStatus}
           roles={data.roles}
           saveState={state.saveState}
@@ -313,6 +323,8 @@ export function App() {
           onUserDelete={actions.deleteUser}
           onUserUpdate={actions.updateUser}
           onWorkspaceCreate={actions.createWorkspace}
+          onWorkspaceDelete={actions.deleteWorkspace}
+          onWorkspaceUpdate={actions.updateWorkspace}
         />
 
         <div
@@ -363,6 +375,14 @@ export function App() {
 
             return actions.resetPassword(authAction.token, password);
           }}
+        />
+      )}
+
+      {isInitialSetupOpen && (
+        <InitialSetupDialog
+          status={state.setupStatus}
+          onClose={() => setIsInitialSetupOpen(false)}
+          onSubmit={(input) => actions.bootstrapInstallation(input)}
         />
       )}
 

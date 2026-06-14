@@ -1,13 +1,20 @@
 import type {
+  DeleteWorkspaceResponse,
   WorkspaceResponse,
-  WorkspacesResponse
+  WorkspacesResponse,
+  UpdateWorkspaceRequest,
 } from "@plainbase/shared";
+import { readRouteParam } from "../services/validation.js";
 import { Router } from "express";
 import { requirePermission } from "../middleware/require-permission.js";
+import { DocumentService } from "../services/document-service.js";
 import { WorkspaceService } from "../services/workspace-service.js";
 import { isAdmin } from "@plainbase/shared";
 
-export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
+export function createWorkspaceRoutes(
+  workspaceService: WorkspaceService,
+  documentService: DocumentService
+) {
   const router = Router();
 
   router.get("/workspaces", (request, response) => {
@@ -29,6 +36,7 @@ export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
     ),
     (request, response) => {
       const workspace = workspaceService.createWorkspace(request.body, request.auth);
+      documentService.listDocumentsByWorkspace(workspace.id, request.auth);
       const payload: WorkspaceResponse = {
         success: true,
         data: {
@@ -37,6 +45,53 @@ export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
       };
 
       response.status(201).json(payload);
+    }
+  );
+
+  router.put(
+    "/workspaces/:workspaceId",
+    requirePermission(
+      isAdmin,
+      "The active user cannot update workspaces."
+    ),
+    (request, response) => {
+      const workspaceId = readRouteParam(request.params, "workspaceId");
+      const workspace = workspaceService.updateWorkspace(
+        workspaceId,
+        request.body satisfies UpdateWorkspaceRequest,
+        request.auth
+      );
+      documentService.listDocumentsByWorkspace(workspace.id, request.auth);
+      const payload: WorkspaceResponse = {
+        success: true,
+        data: {
+          workspace
+        }
+      };
+
+      response.json(payload);
+    }
+  );
+
+  router.delete(
+    "/workspaces/:workspaceId",
+    requirePermission(
+      isAdmin,
+      "The active user cannot delete workspaces."
+    ),
+    (request, response) => {
+      const workspaceId = readRouteParam(request.params, "workspaceId");
+      const payload: DeleteWorkspaceResponse = {
+        success: true,
+        data: {
+          deletedWorkspaceId: workspaceService.deleteWorkspace(
+            workspaceId,
+            request.auth
+          )
+        }
+      };
+
+      response.json(payload);
     }
   );
 

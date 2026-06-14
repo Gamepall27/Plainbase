@@ -1,5 +1,6 @@
 import type {
   AuthResponse,
+  OnboardingResponse,
   PasswordResetRequestResponse,
   ResetPasswordResponse
 } from "@plainbase/shared";
@@ -17,6 +18,33 @@ export function createAuthRoutes(authService: AuthService) {
     };
 
     response.json(payload);
+  });
+
+  router.get("/auth/onboarding", (request, response) => {
+    const payload: OnboardingResponse = {
+      success: true,
+      data: {
+        onboarding: authService.getOnboardingState(request.auth)
+      }
+    };
+
+    response.json(payload);
+  });
+
+  router.post("/auth/bootstrap", (request, response) => {
+    const sessionResult = authService.bootstrapInstallation(request.body);
+    setSessionCookie(
+      response,
+      sessionResult.sessionToken,
+      sessionResult.auth.session.expiresAt
+    );
+
+    const payload: AuthResponse = {
+      success: true,
+      data: sessionResult.auth
+    };
+
+    response.status(201).json(payload);
   });
 
   router.post("/auth/sign-in", (request, response) => {
