@@ -6,11 +6,19 @@ type AdminToolsPanelProps = {
   roles: Role[];
   selectedWorkspace: Workspace | null;
   selectedWorkspaceName: string | null;
+  invitationMutationStatus: SaveState;
   userMutationStatus: SaveState;
   usersState: LoadState<User[]>;
   workspaceMutationStatus: SaveState;
   workspacesState: LoadState<Workspace[]>;
   onClose: () => void;
+  onInvitationCreate: (input: {
+    name: string;
+    username: string;
+    email: string;
+    roleId: string;
+    avatarUrl: string | null;
+  }) => Promise<string | null>;
   onUserCreate: (input: {
     name: string;
     username: string;
@@ -42,11 +50,13 @@ export function AdminToolsPanel({
   roles,
   selectedWorkspace,
   selectedWorkspaceName,
+  invitationMutationStatus,
   userMutationStatus,
   usersState,
   workspaceMutationStatus,
   workspacesState,
   onClose,
+  onInvitationCreate,
   onUserCreate,
   onUserUpdate,
   onUserDelete,
@@ -66,6 +76,14 @@ export function AdminToolsPanel({
     slug: "",
     rootPath: ""
   });
+  const [inviteFormState, setInviteFormState] = useState({
+    name: "",
+    username: "",
+    email: "",
+    roleId: roles[1]?.id ?? roles[0]?.id ?? "",
+    avatarUrl: ""
+  });
+  const [invitationLink, setInvitationLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (userFormState.roleId !== "" || roles.length === 0) {
@@ -77,6 +95,17 @@ export function AdminToolsPanel({
       roleId: roles[1]?.id ?? roles[0]?.id ?? ""
     }));
   }, [userFormState.roleId, roles]);
+
+  useEffect(() => {
+    if (inviteFormState.roleId !== "" || roles.length === 0) {
+      return;
+    }
+
+    setInviteFormState((current) => ({
+      ...current,
+      roleId: roles[1]?.id ?? roles[0]?.id ?? ""
+    }));
+  }, [inviteFormState.roleId, roles]);
 
   function resetUserForm() {
     setEditingUserId(null);
@@ -150,6 +179,29 @@ export function AdminToolsPanel({
     });
   }
 
+  async function handleInvitationSubmit() {
+    const acceptUrl = await onInvitationCreate({
+      name: inviteFormState.name.trim(),
+      username: inviteFormState.username.trim().toLowerCase(),
+      email: inviteFormState.email.trim().toLowerCase(),
+      roleId: inviteFormState.roleId,
+      avatarUrl: inviteFormState.avatarUrl.trim() || null
+    });
+
+    if (!acceptUrl) {
+      return;
+    }
+
+    setInvitationLink(acceptUrl);
+    setInviteFormState({
+      name: "",
+      username: "",
+      email: "",
+      roleId: roles[1]?.id ?? roles[0]?.id ?? "",
+      avatarUrl: ""
+    });
+  }
+
   async function handleDelete(user: User) {
     if (!window.confirm(`"${user.name}" wirklich entfernen?`)) {
       return;
@@ -163,17 +215,7 @@ export function AdminToolsPanel({
   }
 
   return (
-    <section className="main-stage admin-stage">
-      <div className="document-tabs">
-        <button type="button" className="document-tab active">
-          <span>Admin-Tools</span>
-        </button>
-        <button type="button" className="document-tab-add" onClick={onClose}>
-          x
-        </button>
-      </div>
-
-      <div className="document-shell admin-tools-shell">
+    <div className="document-shell admin-tools-shell">
         <section className="admin-tools-hero">
           <div>
             <p className="canvas-eyebrow">{selectedWorkspaceName ?? "Workspace"}</p>
@@ -446,9 +488,118 @@ export function AdminToolsPanel({
           <section className="addon-panel-card">
             <div className="user-panel-header">
               <div>
+                <h3>Einladung erstellen</h3>
+                <p className="sidebar-copy">
+                  Neue Nutzer erhalten einen einmaligen Link und setzen ihr Passwort
+                  selbst.
+                </p>
+              </div>
+            </div>
+
+            <form
+              className="admin-user-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleInvitationSubmit();
+              }}
+            >
+              <input
+                className="field"
+                placeholder="Name"
+                value={inviteFormState.name}
+                onChange={(event) =>
+                  setInviteFormState((current) => ({
+                    ...current,
+                    name: event.target.value
+                  }))
+                }
+              />
+              <input
+                className="field"
+                placeholder="Benutzername"
+                value={inviteFormState.username}
+                onChange={(event) =>
+                  setInviteFormState((current) => ({
+                    ...current,
+                    username: event.target.value
+                  }))
+                }
+              />
+              <input
+                className="field"
+                placeholder="E-Mail"
+                value={inviteFormState.email}
+                onChange={(event) =>
+                  setInviteFormState((current) => ({
+                    ...current,
+                    email: event.target.value
+                  }))
+                }
+              />
+              <input
+                className="field"
+                placeholder="Bild-URL"
+                value={inviteFormState.avatarUrl}
+                onChange={(event) =>
+                  setInviteFormState((current) => ({
+                    ...current,
+                    avatarUrl: event.target.value
+                  }))
+                }
+              />
+              <select
+                className="field"
+                value={inviteFormState.roleId}
+                onChange={(event) =>
+                  setInviteFormState((current) => ({
+                    ...current,
+                    roleId: event.target.value
+                  }))
+                }
+              >
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="toolbar-primary-button"
+                disabled={
+                  invitationMutationStatus.status === "saving" ||
+                  inviteFormState.name.trim() === "" ||
+                  inviteFormState.username.trim() === "" ||
+                  inviteFormState.email.trim() === "" ||
+                  inviteFormState.roleId.trim() === ""
+                }
+              >
+                {invitationMutationStatus.status === "saving"
+                  ? "Erstelle Einladung..."
+                  : "Einladung erzeugen"}
+              </button>
+            </form>
+
+            {invitationMutationStatus.status === "error" && (
+              <p className="feedback error">{invitationMutationStatus.message}</p>
+            )}
+            {invitationMutationStatus.status === "success" && (
+              <p className="feedback success">{invitationMutationStatus.message}</p>
+            )}
+            {invitationLink && (
+              <p className="topbar-user-menu-helper">
+                Einladungslink: <a href={invitationLink}>{invitationLink}</a>
+              </p>
+            )}
+          </section>
+
+          <section className="addon-panel-card">
+            <div className="user-panel-header">
+              <div>
                 <h3>Nutzerverzeichnis</h3>
                 <p className="sidebar-copy">
-                  Demo-Zugang: `admin`, `editor` oder `viewer` mit Passwort `123`.
+                  Seed-Konten: `admin`, `editor` oder `viewer` mit Passwort
+                  `plainbase123`.
                 </p>
               </div>
             </div>
@@ -514,7 +665,6 @@ export function AdminToolsPanel({
           </section>
         </section>
       </div>
-    </section>
   );
 }
 

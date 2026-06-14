@@ -21,6 +21,7 @@ type RightSidebarProps = {
   linkedDocuments: Document[];
   mayCreateTicket: boolean;
   rightSidebarPanels: SidebarPanelExtension<ReactNode>[];
+  showTicketUi: boolean;
   ticketFilter: TicketFilter;
   tickets: Ticket[];
   onDocumentSelect: (documentId: string) => void;
@@ -46,16 +47,24 @@ export function RightSidebar({
   linkedDocuments,
   mayCreateTicket,
   rightSidebarPanels,
+  showTicketUi,
   ticketFilter,
   tickets,
   onDocumentSelect,
   onPanelTabChange,
   onTicketFilterChange
 }: RightSidebarProps) {
+  const visibleTabs = showTicketUi
+    ? rightPanelTabs
+    : rightPanelTabs.filter((tab) => tab.id !== "tickets");
+  const visibleSidebarPanels = showTicketUi
+    ? rightSidebarPanels
+    : rightSidebarPanels.filter((panel) => !isTicketPanel(panel.id));
+
   return (
     <aside className="right-sidebar">
       <div className="context-tabs">
-        {rightPanelTabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -75,7 +84,7 @@ export function RightSidebar({
         </button>
       </div>
 
-      {activePanelTab === "tickets" && (
+      {showTicketUi && activePanelTab === "tickets" && (
         <TicketPanel
           documents={documents}
           mayCreateTicket={mayCreateTicket}
@@ -97,11 +106,15 @@ export function RightSidebar({
           addonPanelContext={addonPanelContext}
           addonRegistryState={addonRegistryState}
           addonWarnings={addonWarnings}
-          rightSidebarPanels={rightSidebarPanels}
+          rightSidebarPanels={visibleSidebarPanels}
         />
       )}
     </aside>
   );
+}
+
+function isTicketPanel(panelId: string) {
+  return panelId.startsWith("tickets.");
 }
 
 type TicketPanelProps = {

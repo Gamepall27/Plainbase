@@ -25,7 +25,7 @@ export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
     "/workspaces",
     requirePermission(
       isAdmin,
-      "The active demo user cannot create workspaces."
+      "The active user cannot create workspaces."
     ),
     (request, response) => {
       const workspace = workspaceService.createWorkspace(request.body);

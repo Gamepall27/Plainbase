@@ -523,6 +523,22 @@ html[data-theme="dark"] .workspace-layout {
   background: rgba(15, 23, 42, 0.88);
 }
 
+html[data-theme="dark"] .sidebar-resize-handle {
+  background: linear-gradient(
+    180deg,
+    rgba(71, 85, 105, 0.16),
+    rgba(30, 41, 59, 0.24)
+  );
+}
+
+html[data-theme="dark"] .sidebar-resize-handle::before {
+  background: rgba(226, 232, 240, 0.16);
+}
+
+html[data-theme="dark"] .sidebar-resize-handle:hover::before {
+  background: rgba(64, 156, 255, 0.48);
+}
+
 html[data-theme="dark"] .left-sidebar {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96));
 }
@@ -718,8 +734,15 @@ html[data-theme="dark"] .user-card-avatar {
 }
 
 .workspace-layout {
+  --left-sidebar-width: 260px;
+  --right-sidebar-width: 306px;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 306px;
+  grid-template-columns:
+    var(--left-sidebar-width)
+    12px
+    minmax(0, 1fr)
+    12px
+    var(--right-sidebar-width);
   border: 1px solid rgba(23, 32, 58, 0.08);
   border-top: 0;
   border-radius: 0 0 22px 22px;
@@ -728,10 +751,40 @@ html[data-theme="dark"] .user-card-avatar {
   overflow: hidden;
 }
 
+.workspace-layout-admin {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .left-sidebar,
 .main-stage,
 .right-sidebar {
   min-width: 0;
+}
+
+.sidebar-resize-handle {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    rgba(208, 217, 238, 0.14),
+    rgba(148, 163, 184, 0.18)
+  );
+  cursor: col-resize;
+}
+
+.sidebar-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  bottom: 0.85rem;
+  left: 50%;
+  width: 2px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: rgba(23, 32, 58, 0.14);
+}
+
+.sidebar-resize-handle:hover::before {
+  background: rgba(47, 109, 246, 0.38);
 }
 
 .left-sidebar {
@@ -2784,6 +2837,10 @@ html[data-theme="dark"] .unsaved-pill {
 @media (max-width: 1280px) {
   .workspace-layout {
     grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .sidebar-resize-handle {
+    display: none;
   }
 
   .right-sidebar {

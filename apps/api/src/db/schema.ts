@@ -58,6 +58,46 @@ const schemaStatements = [
     )
   `,
   `
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS user_invitations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      username TEXT NOT NULL,
+      email TEXT NOT NULL,
+      role_id TEXT NOT NULL,
+      avatar_url TEXT,
+      invited_by_user_id TEXT NOT NULL,
+      accepted_user_id TEXT,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      accepted_at TEXT,
+      FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT,
+      FOREIGN KEY (invited_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+      FOREIGN KEY (accepted_user_id) REFERENCES users (id) ON DELETE SET NULL
+    )
+  `,
+  `
     CREATE TABLE IF NOT EXISTS addons (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -100,6 +140,22 @@ const schemaStatements = [
   `
     CREATE INDEX IF NOT EXISTS tickets_document_id_idx
     ON tickets (document_id)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS auth_sessions_user_id_idx
+    ON auth_sessions (user_id)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS auth_sessions_expires_at_idx
+    ON auth_sessions (expires_at)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS password_reset_tokens_user_id_idx
+    ON password_reset_tokens (user_id)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS user_invitations_email_idx
+    ON user_invitations (email)
   `
 ];
 

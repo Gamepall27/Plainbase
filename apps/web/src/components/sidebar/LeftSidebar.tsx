@@ -19,9 +19,11 @@ type LeftSidebarProps = {
   mayDeleteDocument: boolean;
   mayEditDocument: boolean;
   mayManageAddons: boolean;
+  mayManageUsers: boolean;
   pendingAddonId: string | null;
   selectedDocumentId: string | null;
   selectedWorkspaceId: string | null;
+  showTicketUi: boolean;
   tickets: Ticket[];
   workspacesState: LoadState<Workspace[]>;
   onAddonToggle: (addonId: string) => void;
@@ -33,7 +35,9 @@ type LeftSidebarProps = {
   onDocumentDelete: (documentId: string) => Promise<boolean>;
   onDocumentRename: (documentId: string, title: string) => Promise<boolean>;
   onDocumentSelect: (documentId: string) => void;
+  onDocumentOpenInNewTab: (documentId: string) => void;
   onCreateEntry: (kind: DocumentKind) => void;
+  onOpenAdminTools: () => void;
   onOpenSettings: () => void;
   onQuickLinkSelect: (linkId: QuickLinkId) => void;
   onWorkspaceSelect: (workspaceId: string) => void;
@@ -50,9 +54,11 @@ export function LeftSidebar({
   mayDeleteDocument,
   mayEditDocument,
   mayManageAddons,
+  mayManageUsers,
   pendingAddonId,
   selectedDocumentId,
   selectedWorkspaceId,
+  showTicketUi,
   tickets,
   workspacesState,
   onAddonToggle,
@@ -60,7 +66,9 @@ export function LeftSidebar({
   onDocumentMove,
   onDocumentRename,
   onDocumentSelect,
+  onDocumentOpenInNewTab,
   onCreateEntry,
+  onOpenAdminTools,
   onOpenSettings,
   onQuickLinkSelect,
   onWorkspaceSelect
@@ -209,6 +217,16 @@ export function LeftSidebar({
               <span>{link.label}</span>
             </button>
           ))}
+          {mayManageUsers && (
+            <button
+              type="button"
+              className="left-nav-link"
+              onClick={onOpenAdminTools}
+            >
+              <span className="left-nav-link-icon">+</span>
+              <span>Admin-Tools</span>
+            </button>
+          )}
         </div>
       </section>
 
@@ -274,6 +292,7 @@ export function LeftSidebar({
                         }}
                         onRenameCommit={handleRenameCommit}
                         onSelect={onDocumentSelect}
+                        onOpenInNewTab={onDocumentOpenInNewTab}
                       />
                     ))}
                   </div>
@@ -297,7 +316,7 @@ export function LeftSidebar({
               />
             </span>
             <span className="addon-check-label">{addon.name}</span>
-            {addon.name === "Tickets" && (
+            {showTicketUi && addon.name === "Tickets" && (
               <span className="addon-counter-badge">
                 {tickets.filter((ticket) => ticket.status === "Open").length}
               </span>

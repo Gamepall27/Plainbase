@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test("critical app shell flows render successfully", async ({ page }) => {
   await page.goto("/");
-  await page.request.post("/api/demo-user/sign-out");
+  await page.request.post("/api/auth/sign-out");
   await page.reload();
 
   await expect(page.getByText("Plainbase")).toBeVisible();
@@ -10,7 +10,7 @@ test("critical app shell flows render successfully", async ({ page }) => {
 
   await page.getByRole("button", { name: "Anmelden oder Profilmenue oeffnen" }).click();
   await page.getByPlaceholder("E-Mail oder Benutzername").fill("editor");
-  await page.getByPlaceholder("Passwort").fill("123");
+  await page.getByPlaceholder("Passwort").fill("plainbase123");
   await page.getByRole("button", { name: "Anmelden", exact: true }).click();
 
   const profileButton = page.getByRole("button", { name: /oeffnet Kontomenue/i });

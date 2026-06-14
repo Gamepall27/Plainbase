@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Ticket } from "@plainbase/shared";
-import type { DemoAuthContext } from "../auth/demo-auth-context.js";
-import { requireDemoUser } from "../auth/demo-auth-context.js";
+import type { AuthContext } from "../auth/auth-context.js";
+import { requireAuthenticatedUser } from "../auth/auth-context.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { TicketRepository } from "../db/repositories/ticket-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
@@ -32,8 +32,8 @@ export class TicketService {
     return this.ticketRepository.listByWorkspaceId(workspaceId);
   }
 
-  createTicket(input: unknown, actor: DemoAuthContext) {
-    const demoUser = requireDemoUser(actor);
+  createTicket(input: unknown, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     const body = expectObject(input);
     const workspaceId = readRequiredString(body, "workspaceId");
     const title = readRequiredString(body, "title");
@@ -55,14 +55,14 @@ export class TicketService {
       title,
       description,
       status,
-      creatorId: demoUser.user.id,
+      creatorId: authenticatedUser.user.id,
       assigneeId: assigneeId ?? null,
       createdAt: timestamp,
       updatedAt: timestamp
     });
   }
 
-  updateTicket(ticketId: string, input: unknown, _actor: DemoAuthContext) {
+  updateTicket(ticketId: string, input: unknown, _actor: AuthContext) {
     const existingTicket = this.requireTicket(ticketId);
     const body = expectObject(input);
 

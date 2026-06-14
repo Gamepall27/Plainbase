@@ -1,9 +1,9 @@
-import type { DemoAuthContext } from "../auth/demo-auth-context.js";
+import type { AuthContext } from "../auth/auth-context.js";
 
 declare global {
   namespace Express {
     interface Request {
-      auth: DemoAuthContext;
+      auth: AuthContext;
     }
   }
 }

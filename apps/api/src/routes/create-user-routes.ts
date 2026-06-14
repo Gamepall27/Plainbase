@@ -1,19 +1,19 @@
 import type {
   DeleteUserResponse,
+  InvitationResponse,
   UserResponse,
-  DemoUserResponse,
   UsersResponse
 } from "@plainbase/shared";
 import { Router } from "express";
 import { canManageUsers } from "@plainbase/shared";
-import { DemoAuthService } from "../services/demo-auth-service.js";
+import { AuthService } from "../services/auth-service.js";
 import { UserService } from "../services/user-service.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { readRouteParam } from "../services/validation.js";
 
 export function createUserRoutes(
   userService: UserService,
-  demoAuthService: DemoAuthService
+  authService: AuthService
 ) {
   const router = Router();
 
@@ -32,7 +32,7 @@ export function createUserRoutes(
     "/users",
     requirePermission(
       canManageUsers,
-      "The active demo user cannot create users."
+      "The active user cannot create users."
     ),
     (request, response) => {
       const payload: UserResponse = {
@@ -50,7 +50,7 @@ export function createUserRoutes(
     "/users/:userId",
     requirePermission(
       canManageUsers,
-      "The active demo user cannot update users."
+      "The active user cannot update users."
     ),
     (request, response) => {
       const userId = readRouteParam(request.params, "userId");
@@ -69,7 +69,7 @@ export function createUserRoutes(
     "/users/:userId",
     requirePermission(
       canManageUsers,
-      "The active demo user cannot delete users."
+      "The active user cannot delete users."
     ),
     (request, response) => {
       const userId = readRouteParam(request.params, "userId");
@@ -84,41 +84,23 @@ export function createUserRoutes(
     }
   );
 
-  router.get("/demo-user", (_request, response) => {
-    const payload: DemoUserResponse = {
-      success: true,
-      data: demoAuthService.getActiveDemoAuth()
-    };
+  router.post(
+    "/invitations",
+    requirePermission(
+      canManageUsers,
+      "The active user cannot invite new users."
+    ),
+    (request, response) => {
+      const payload: InvitationResponse = {
+        success: true,
+        data: {
+          invitation: authService.createInvitation(request.body, request.auth)
+        }
+      };
 
-    response.json(payload);
-  });
-
-  router.post("/demo-user/switch-role", (request, response) => {
-    const payload: DemoUserResponse = {
-      success: true,
-      data: demoAuthService.switchDemoUserRole(request.body)
-    };
-
-    response.json(payload);
-  });
-
-  router.post("/demo-user/sign-in", (request, response) => {
-    const payload: DemoUserResponse = {
-      success: true,
-      data: demoAuthService.signIn(request.body)
-    };
-
-    response.json(payload);
-  });
-
-  router.post("/demo-user/sign-out", (_request, response) => {
-    const payload: DemoUserResponse = {
-      success: true,
-      data: demoAuthService.signOut()
-    };
-
-    response.json(payload);
-  });
+      response.status(201).json(payload);
+    }
+  );
 
   return router;
 }

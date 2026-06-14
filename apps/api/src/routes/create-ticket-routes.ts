@@ -24,7 +24,7 @@ export function createTicketRoutes(ticketService: TicketService) {
     "/tickets",
     requirePermission(
       canCreateTicket,
-      "The active demo user cannot create tickets."
+      "The active user cannot create tickets."
     ),
     (request, response) => {
       const payload: TicketResponse = {
@@ -42,7 +42,7 @@ export function createTicketRoutes(ticketService: TicketService) {
     "/tickets/:ticketId",
     requirePermission(
       canEditTicket,
-      "The active demo user cannot edit tickets."
+      "The active user cannot edit tickets."
     ),
     (request, response) => {
       const ticketId = readRouteParam(request.params, "ticketId");

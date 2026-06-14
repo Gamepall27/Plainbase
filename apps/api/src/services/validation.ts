@@ -8,6 +8,7 @@ const ticketStatuses = [
   "Done"
 ] satisfies TicketStatus[];
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const usernamePattern = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
 
 export function expectObject(value: unknown, message = "Request body must be an object.") {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -168,6 +169,23 @@ export function validateEmail(email: string, field = "email") {
   if (!email.includes("@")) {
     throw new ApiError(422, "VALIDATION_ERROR", "Validation failed.", {
       [field]: "Email must contain @."
+    });
+  }
+}
+
+export function validateUsername(username: string, field = "username") {
+  if (!usernamePattern.test(username)) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Validation failed.", {
+      [field]:
+        "Username must be 3-32 characters and use lowercase letters, numbers, dots, underscores, or hyphens."
+    });
+  }
+}
+
+export function validatePassword(password: string, field = "password") {
+  if (password.length < 8) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Validation failed.", {
+      [field]: "Password must be at least 8 characters long."
     });
   }
 }

@@ -1,6 +1,4 @@
-import { dirname, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 import { defaultDemoPassword, hashPassword } from "../auth/passwords.js";
 import type {
   Addon,
@@ -11,21 +9,12 @@ import type {
   Workspace
 } from "@plainbase/shared";
 
-const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const packageRoot = resolve(currentDirectory, "..", "..");
-const demoWorkspaceRootPath = resolve(
-  packageRoot,
-  "data",
-  "content",
-  "demo-company"
-);
-
 const workspaces: Workspace[] = [
   {
     id: "workspace-demo-company",
     name: "Demo Company Workspace",
     slug: "demo-company",
-    rootPath: demoWorkspaceRootPath,
+    rootPath: "",
     createdAt: "2026-01-10T09:00:00.000Z",
     updatedAt: "2026-01-10T09:00:00.000Z"
   }
@@ -178,11 +167,6 @@ const addons: Addon[] = [
   }
 ];
 
-const appState = {
-  key: "demo_user_id",
-  value: "__guest__"
-};
-
 export function seedDatabase(database: DatabaseSync) {
   const insertWorkspace = database.prepare(`
     INSERT INTO workspaces (id, name, slug, root_path, created_at, updated_at)
@@ -251,11 +235,6 @@ export function seedDatabase(database: DatabaseSync) {
       description = excluded.description,
       enabled = excluded.enabled,
       manifest_json = excluded.manifest_json
-  `);
-  const insertAppState = database.prepare(`
-    INSERT INTO app_state (key, value)
-    VALUES (?, ?)
-    ON CONFLICT(key) DO NOTHING
   `);
   const insertTicket = database.prepare(`
     INSERT INTO tickets (
@@ -349,8 +328,6 @@ export function seedDatabase(database: DatabaseSync) {
         addon.manifestJson
       );
     }
-
-    insertAppState.run(appState.key, appState.value);
 
     for (const ticket of tickets) {
       insertTicket.run(

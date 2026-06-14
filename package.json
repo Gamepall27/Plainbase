@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w @plainbase/shared && npm run build -w @plainbase/addon-sdk && npm run build -w @plainbase/api && npm run build -w @plainbase/web",
+    "package:self-hosted": "npm run build && node scripts/package-self-hosted.mjs",
     "test": "npm run test:unit && npm run test:api && npm run test:e2e",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "test:api": "tsx --test tests/api/**/*.test.ts",

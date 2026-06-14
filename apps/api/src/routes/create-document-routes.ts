@@ -44,7 +44,7 @@ export function createDocumentRoutes(documentService: DocumentService) {
     "/documents",
     requirePermission(
       canCreateDocument,
-      "The active demo user cannot create documents."
+      "The active user cannot create documents."
     ),
     (request, response) => {
       const document = documentService.createDocument(request.body, request.auth);
@@ -63,7 +63,7 @@ export function createDocumentRoutes(documentService: DocumentService) {
     "/documents/:documentId",
     requirePermission(
       canEditDocument,
-      "The active demo user cannot edit documents."
+      "The active user cannot edit documents."
     ),
     (request, response) => {
       const documentId = readRouteParam(request.params, "documentId");
@@ -82,7 +82,7 @@ export function createDocumentRoutes(documentService: DocumentService) {
     "/documents/:documentId",
     requirePermission(
       canDeleteDocument,
-      "The active demo user cannot delete documents."
+      "The active user cannot delete documents."
     ),
     (request, response) => {
       const documentId = readRouteParam(request.params, "documentId");

@@ -214,19 +214,26 @@ export type DeleteDocumentResponse = ApiSuccessResponse<{
   deletedDocumentId: string;
 }>;
 
-export type DemoUser = {
-  authType: "demo";
+export type SessionAuth = {
+  authType: "session";
   user: User;
   role: Role;
+  session: {
+    expiresAt: string;
+  };
 };
 
 export type GuestAuth = {
   authType: "guest";
   user: null;
   role: null;
+  session: null;
 };
 
-export type DemoAuth = DemoUser | GuestAuth;
+export type AuthState = SessionAuth | GuestAuth;
+export type DemoUser = SessionAuth;
+export type DemoAuth = AuthState;
+export type AuthResponse = ApiSuccessResponse<AuthState>;
 
 export type UsersResponse = ApiSuccessResponse<{
   users: User[];
@@ -259,14 +266,60 @@ export type DeleteUserResponse = ApiSuccessResponse<{
 }>;
 
 export type DemoUserResponse = ApiSuccessResponse<DemoAuth>;
+export type PasswordResetRequestResponse = ApiSuccessResponse<{
+  accepted: true;
+  deliveryMethod: "manual_link";
+  resetUrl: string | null;
+}>;
+
+export type ResetPasswordResponse = ApiSuccessResponse<{
+  passwordUpdated: true;
+}>;
+
+export type Invitation = {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  roleId: string;
+  roleName: RoleName;
+  avatarUrl: string | null;
+  invitedByUserId: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptUrl: string;
+};
+
+export type InvitationResponse = ApiSuccessResponse<{
+  invitation: Invitation;
+}>;
 
 export type SignInRequest = {
   identifier: string;
   password: string;
 };
 
-export type SwitchDemoUserRoleRequest = {
-  roleName: RoleName;
+export type PasswordResetRequest = {
+  identifier: string;
+};
+
+export type ResetPasswordRequest = {
+  token: string;
+  password: string;
+};
+
+export type CreateInvitationRequest = {
+  name: string;
+  username: string;
+  email: string;
+  roleId: string;
+  avatarUrl?: string | null;
+};
+
+export type AcceptInvitationRequest = {
+  token: string;
+  password: string;
 };
 
 export type RolesResponse = ApiSuccessResponse<{

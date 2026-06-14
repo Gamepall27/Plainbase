@@ -11,6 +11,19 @@ Plainbase ist ein lokales Browser-Tool fuer Markdown-Wissensseiten, Tickets und 
 
 Die App ist aktuell als MVP fuer lokale Entwicklung gedacht, nicht als produktionsreifes Multi-User-System.
 
+## Self-Hosted Auslieferung
+
+Fuer reproduzierbare Kundeninstallationen gibt es jetzt einen definierten Self-Hosted-Pfad auf Linux mit Release-Bundle, `systemd` und `nginx`.
+
+Bundle erzeugen:
+
+```bash
+npm run package:self-hosted
+```
+
+Danach liegen die Artefakte unter `artifacts/plainbase-self-hosted/`.
+Die komplette Installations-, Betriebs- und Update-Dokumentation steht in `docs/self-hosted.md`.
+
 ## Schnellstart
 
 Voraussetzungen:

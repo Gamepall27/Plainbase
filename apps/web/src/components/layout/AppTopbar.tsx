@@ -10,6 +10,7 @@ type AppTopbarProps = {
   selectedWorkspace: Workspace | null;
   onOpenSettings: () => void;
   onSignIn: (identifier: string, password: string) => Promise<boolean>;
+  onRequestPasswordReset: (identifier: string) => Promise<string | null>;
   onSignOut: () => void;
 };
 
@@ -20,17 +21,20 @@ export function AppTopbar({
   selectedWorkspace,
   onOpenSettings,
   onSignIn,
+  onRequestPasswordReset,
   onSignOut
 }: AppTopbarProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"sign-in" | "reset">("sign-in");
   const [loginForm, setLoginForm] = useState({
     identifier: "",
     password: ""
   });
+  const [resetLink, setResetLink] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const auth = demoUserState.status === "success" ? demoUserState.data : null;
-  const demoAuth = auth?.authType === "demo" ? auth : null;
+  const demoAuth = auth?.authType === "session" ? auth : null;
   const isDemoUser = demoAuth !== null;
 
   useEffect(() => {
@@ -74,12 +78,21 @@ export function AppTopbar({
     }
 
     setLoginForm({ identifier: "", password: "" });
+    setResetLink(null);
+    setAuthMode("sign-in");
     setIsUserMenuOpen(false);
   }
 
   function handleSignOut() {
     onSignOut();
     setIsUserMenuOpen(false);
+  }
+
+  async function handlePasswordResetSubmit() {
+    const createdResetLink = await onRequestPasswordReset(
+      loginForm.identifier.trim()
+    );
+    setResetLink(createdResetLink);
   }
 
   return (
@@ -176,16 +189,31 @@ export function AppTopbar({
                 ) : (
                   <>
                     <div className="topbar-user-menu-summary">
-                      <span className="topbar-user-menu-eyebrow">Anmeldung</span>
-                      <strong>Willkommen zurueck</strong>
-                      <span>Melde dich mit E-Mail oder Benutzername an.</span>
+                      <span className="topbar-user-menu-eyebrow">
+                        {authMode === "sign-in" ? "Anmeldung" : "Passwort-Reset"}
+                      </span>
+                      <strong>
+                        {authMode === "sign-in"
+                          ? "Willkommen zurueck"
+                          : "Neues Passwort anfordern"}
+                      </strong>
+                      <span>
+                        {authMode === "sign-in"
+                          ? "Melde dich mit E-Mail oder Benutzername an."
+                          : "Wir erzeugen einen einmaligen Reset-Link fuer dein Konto."}
+                      </span>
                     </div>
 
                     <form
                       className="topbar-login-form"
                       onSubmit={(event) => {
                         event.preventDefault();
-                        void handleSignInSubmit();
+                        if (authMode === "sign-in") {
+                          void handleSignInSubmit();
+                          return;
+                        }
+
+                        void handlePasswordResetSubmit();
                       }}
                     >
                       <input
@@ -199,39 +227,69 @@ export function AppTopbar({
                           }))
                         }
                       />
-                      <input
-                        className="field"
-                        type="password"
-                        placeholder="Passwort"
-                        value={loginForm.password}
-                        onChange={(event) =>
-                          setLoginForm((current) => ({
-                            ...current,
-                            password: event.target.value
-                          }))
-                        }
-                      />
+                      {authMode === "sign-in" && (
+                        <input
+                          className="field"
+                          type="password"
+                          placeholder="Passwort"
+                          value={loginForm.password}
+                          onChange={(event) =>
+                            setLoginForm((current) => ({
+                              ...current,
+                              password: event.target.value
+                            }))
+                          }
+                        />
+                      )}
                       <button
                         type="submit"
                         className="toolbar-primary-button"
                         disabled={
                           roleSwitchStatus.status === "saving" ||
                           loginForm.identifier.trim() === "" ||
-                          loginForm.password.trim() === ""
+                          (authMode === "sign-in" &&
+                            loginForm.password.trim() === "")
                         }
                       >
                         {roleSwitchStatus.status === "saving"
-                          ? "Anmeldung laeuft..."
-                          : "Anmelden"}
+                          ? authMode === "sign-in"
+                            ? "Anmeldung laeuft..."
+                            : "Link wird erstellt..."
+                          : authMode === "sign-in"
+                            ? "Anmelden"
+                            : "Reset-Link erstellen"}
                       </button>
                     </form>
 
+                    <button
+                      type="button"
+                      className="inline-link-button"
+                      onClick={() => {
+                        setAuthMode((current) =>
+                          current === "sign-in" ? "reset" : "sign-in"
+                        );
+                        setResetLink(null);
+                      }}
+                    >
+                      {authMode === "sign-in"
+                        ? "Passwort vergessen?"
+                        : "Zurueck zur Anmeldung"}
+                    </button>
+
+                    {resetLink && (
+                      <p className="topbar-user-menu-helper">
+                        Reset-Link: <a href={resetLink}>{resetLink}</a>
+                      </p>
+                    )}
                     <p className="topbar-user-menu-helper">
-                      Demo-Logins: `admin`, `editor` oder `viewer`
-                      mit Passwort `123`
+                      Seed-Konten: `admin`, `editor` oder `viewer`
+                      mit Passwort `plainbase123`
                     </p>
                     {roleSwitchStatus.status === "error" && (
                       <p className="feedback error">{roleSwitchStatus.message}</p>
+                    )}
+                    {roleSwitchStatus.status === "success" && (
+                      <p className="feedback success">{roleSwitchStatus.message}</p>
                     )}
                   </>
                 )}

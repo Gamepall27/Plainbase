@@ -2,21 +2,25 @@ import type {
   Addon,
   AddonResponse,
   AddonsResponse,
+  AcceptInvitationRequest,
+  AuthResponse,
   ApiErrorResponse,
+  CreateInvitationRequest,
   CreateWorkspaceRequest,
   CreateUserRequest,
   CreateDocumentRequest,
   DeleteDocumentResponse,
   DeleteUserResponse,
-  DemoUserResponse,
   DocumentResponse,
   DocumentsResponse,
-  Role,
+  InvitationResponse,
+  PasswordResetRequest,
+  PasswordResetRequestResponse,
+  ResetPasswordRequest,
+  ResetPasswordResponse,
   RolesResponse,
   SignInRequest,
-  SwitchDemoUserRoleRequest,
   UpdateUserRequest,
-  User,
   UserResponse,
   UsersResponse,
   TicketsResponse,
@@ -91,28 +95,46 @@ export const apiClient = {
     request<AddonResponse>(`/api/addons/${addonId}/toggle`, {
       method: "PUT"
     }).then((response) => response.data.addon),
-  getDemoUser: () =>
-    request<DemoUserResponse>("/api/demo-user").then((response) => response.data),
-  signInDemoUser: (payload: SignInRequest) =>
-    request<DemoUserResponse>("/api/demo-user/sign-in", {
+  getAuthState: () =>
+    request<AuthResponse>("/api/auth/me").then((response) => response.data),
+  signIn: (payload: SignInRequest) =>
+    request<AuthResponse>("/api/auth/sign-in", {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify(payload)
     }).then((response) => response.data),
-  switchDemoRole: (roleName: Role["name"]) =>
-    request<DemoUserResponse>("/api/demo-user/switch-role", {
+  signOut: () =>
+    request<AuthResponse>("/api/auth/sign-out", {
+      method: "POST"
+    }).then((response) => response.data),
+  requestPasswordReset: (payload: PasswordResetRequest) =>
+    request<PasswordResetRequestResponse>("/api/auth/password-reset/request", {
       method: "POST",
       headers: jsonHeaders,
-      body: JSON.stringify({ roleName } satisfies SwitchDemoUserRoleRequest)
+      body: JSON.stringify(payload)
     }).then((response) => response.data),
-  signOutDemoUser: () =>
-    request<DemoUserResponse>("/api/demo-user/sign-out", {
-      method: "POST"
+  resetPassword: (payload: ResetPasswordRequest) =>
+    request<ResetPasswordResponse>("/api/auth/password-reset/confirm", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data),
+  acceptInvitation: (payload: AcceptInvitationRequest) =>
+    request<AuthResponse>("/api/auth/accept-invite", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
     }).then((response) => response.data),
   getRoles: () =>
     request<RolesResponse>("/api/roles").then((response) => response.data.roles),
   getUsers: () =>
     request<UsersResponse>("/api/users").then((response) => response.data.users),
+  createInvitation: (payload: CreateInvitationRequest) =>
+    request<InvitationResponse>("/api/invitations", {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(payload)
+    }).then((response) => response.data.invitation),
   createUser: (payload: CreateUserRequest) =>
     request<UserResponse>("/api/users", {
       method: "POST",
@@ -136,7 +158,10 @@ export const apiClient = {
 };
 
 async function request<T>(input: RequestInfo | URL, init?: RequestInit) {
-  const response = await fetch(input, init);
+  const response = await fetch(input, {
+    credentials: "same-origin",
+    ...init
+  });
 
   const payload = (await response.json()) as T | ApiErrorResponse;
 

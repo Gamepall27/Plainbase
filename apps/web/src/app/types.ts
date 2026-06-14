@@ -35,17 +35,18 @@ export type QuickLinkId =
   | "all-documents"
   | "favorites"
   | "recent"
-  | "tickets";
+  | "tickets"
+  | "admin-tools";
 
 export type TicketFilter = Ticket["status"];
 
 export type SelectedDocument = Document | null;
-export type WorkspaceTabView = "empty" | "document" | "tickets";
+export type WorkspaceTabView = "empty" | "document" | "tickets" | "admin";
 
 export type WorkspaceTab = {
   id: string;
   documentId: string | null;
-  kind: DocumentKind | "tickets";
+  kind: DocumentKind | "tickets" | "admin";
   view: WorkspaceTabView;
   title: string;
   isActive: boolean;

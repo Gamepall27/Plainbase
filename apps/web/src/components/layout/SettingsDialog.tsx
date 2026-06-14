@@ -24,7 +24,7 @@ export function SettingsDialog({
     return null;
   }
 
-  const signedInAuth = demoAuth?.authType === "demo" ? demoAuth : null;
+  const signedInAuth = demoAuth?.authType === "session" ? demoAuth : null;
 
   return (
     <div className="profile-dialog-backdrop" onClick={onClose}>

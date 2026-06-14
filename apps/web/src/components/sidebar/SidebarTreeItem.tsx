@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DragEvent } from "react";
 import type { SidebarItem } from "../../app/types";
+
+const singleClickDelayMs = 220;
 
 type SidebarTreeItemProps = {
   collapsedFolderIds: string[];
@@ -22,6 +24,7 @@ type SidebarTreeItemProps = {
   onRenameCancel: () => void;
   onRenameCommit: (item: SidebarItem) => void;
   onSelect: (documentId: string) => void;
+  onOpenInNewTab: (documentId: string) => void;
 };
 
 export function SidebarTreeItem({
@@ -39,7 +42,8 @@ export function SidebarTreeItem({
   onFolderToggle,
   onRenameCancel,
   onRenameCommit,
-  onSelect
+  onSelect,
+  onOpenInNewTab
 }: SidebarTreeItemProps) {
   const [activeDropPlacement, setActiveDropPlacement] = useState<
     "before" | "inside" | "after" | null
@@ -50,6 +54,7 @@ export function SidebarTreeItem({
   const isSelected = item.documentId === selectedDocumentId;
   const isDraggable = Boolean(item.documentId) && item.kind !== "folder" && !item.disabled;
   const itemIcon = item.kind === "kanban" ? "KB" : "[]";
+  const clickTimeoutRef = useRef<number | null>(null);
   const className = [
     isFolder ? "tree-folder-button" : "tree-document-item",
     isSelected ? "active" : "",
@@ -58,6 +63,34 @@ export function SidebarTreeItem({
   ]
     .filter(Boolean)
     .join(" ");
+
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current !== null) {
+        window.clearTimeout(clickTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function handleSingleClick(documentId: string) {
+    if (clickTimeoutRef.current !== null) {
+      window.clearTimeout(clickTimeoutRef.current);
+    }
+
+    clickTimeoutRef.current = window.setTimeout(() => {
+      onSelect(documentId);
+      clickTimeoutRef.current = null;
+    }, singleClickDelayMs);
+  }
+
+  function handleDoubleClick(documentId: string) {
+    if (clickTimeoutRef.current !== null) {
+      window.clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+
+    onOpenInNewTab(documentId);
+  }
 
   function allowDrop(
     event: DragEvent<HTMLElement>,
@@ -164,7 +197,8 @@ export function SidebarTreeItem({
             type="button"
             draggable={isDraggable}
             className={className}
-            onClick={() => onSelect(item.documentId!)}
+            onClick={() => handleSingleClick(item.documentId!)}
+            onDoubleClick={() => handleDoubleClick(item.documentId!)}
             onContextMenu={(event) => {
               event.preventDefault();
               onContextMenu(item, event.clientX, event.clientY);
@@ -209,6 +243,7 @@ export function SidebarTreeItem({
               onRenameCancel={onRenameCancel}
               onRenameCommit={onRenameCommit}
               onSelect={onSelect}
+              onOpenInNewTab={onOpenInNewTab}
             />
           ))}
         </div>

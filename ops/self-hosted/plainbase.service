@@ -1,0 +1,21 @@
+[Unit]
+Description=Plainbase API
+After=network.target
+
+[Service]
+Type=simple
+User=plainbase
+Group=plainbase
+WorkingDirectory=__PLAINBASE_CURRENT__
+EnvironmentFile=__PLAINBASE_ENV_FILE__
+ExecStart=/usr/bin/env node apps/api/dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=__PLAINBASE_DATA_DIR__
+
+[Install]
+WantedBy=multi-user.target

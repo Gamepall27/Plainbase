@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Document, DocumentKind, Workspace } from "@plainbase/shared";
-import type { DemoAuthContext } from "../auth/demo-auth-context.js";
+import type { AuthContext } from "../auth/auth-context.js";
 import {
   DocumentFilesystemStore,
   type FilesystemDocumentEntry
 } from "../content/document-filesystem-store.js";
-import { requireDemoUser } from "../auth/demo-auth-context.js";
+import { requireAuthenticatedUser } from "../auth/auth-context.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { ApiError } from "../errors/api-error.js";
@@ -47,8 +47,8 @@ export class DocumentService {
     return this.requireDocument(documentId);
   }
 
-  createDocument(input: unknown, actor: DemoAuthContext) {
-    const demoUser = requireDemoUser(actor);
+  createDocument(input: unknown, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     const body = expectObject(input);
     const workspace = this.requireWorkspace(readRequiredString(body, "workspaceId"));
     this.syncWorkspace(workspace);
@@ -91,16 +91,16 @@ export class DocumentService {
       content,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      createdByUserId: demoUser.user.id,
-      updatedByUserId: demoUser.user.id
+      createdByUserId: authenticatedUser.user.id,
+      updatedByUserId: authenticatedUser.user.id
     };
 
     this.documentFilesystemStore.createEntry(workspace, filePath, kind, content);
     return this.documentRepository.create(document);
   }
 
-  updateDocument(documentId: string, input: unknown, actor: DemoAuthContext) {
-    const demoUser = requireDemoUser(actor);
+  updateDocument(documentId: string, input: unknown, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     const document = this.requireDocument(documentId);
     const workspace = this.requireWorkspace(document.workspaceId);
     this.syncWorkspace(workspace);
@@ -171,7 +171,7 @@ export class DocumentService {
       slug,
       content,
       updatedAt: new Date().toISOString(),
-      updatedByUserId: demoUser.user.id
+      updatedByUserId: authenticatedUser.user.id
     };
 
     this.documentRepository.update(updatedDocument);
@@ -181,7 +181,7 @@ export class DocumentService {
         workspace.id,
         currentFilePath,
         nextFilePath,
-        demoUser.user.id
+        authenticatedUser.user.id
       );
     }
 

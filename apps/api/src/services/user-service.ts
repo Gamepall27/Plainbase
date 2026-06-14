@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AuthState,
   CreateUserRequest,
-  DemoAuth,
   UpdateUserRequest
 } from "@plainbase/shared";
 import { hashPassword } from "../auth/passwords.js";
@@ -16,7 +16,9 @@ import {
   readOptionalString,
   readRequiredString,
   requireAtLeastOneField,
-  validateEmail
+  validateEmail,
+  validatePassword,
+  validateUsername
 } from "./validation.js";
 
 export class UserService {
@@ -115,18 +117,18 @@ export class UserService {
     return updatedUser;
   }
 
-  deleteUser(userId: string, actor: DemoAuth) {
+  deleteUser(userId: string, actor: AuthState) {
     const existingUser = this.userRepository.findById(userId);
 
     if (!existingUser) {
       throw new ApiError(404, "NOT_FOUND", "User not found.");
     }
 
-    if (actor.authType === "demo" && actor.user.id === userId) {
+    if (actor.authType === "session" && actor.user.id === userId) {
       throw new ApiError(
         409,
         "CONFLICT",
-        "The active demo user cannot delete itself."
+        "The active signed-in user cannot delete itself."
       );
     }
 
@@ -161,6 +163,8 @@ export class UserService {
     const avatarUrl = readOptionalNullableString(body, "avatarUrl", "avatarUrl");
 
     validateEmail(email);
+    validateUsername(username);
+    validatePassword(password);
 
     return {
       name,
@@ -184,6 +188,14 @@ export class UserService {
 
     if (email !== undefined) {
       validateEmail(email);
+    }
+
+    if (username !== undefined) {
+      validateUsername(username);
+    }
+
+    if (password !== undefined) {
+      validatePassword(password);
     }
 
     return {

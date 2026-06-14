@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MarkdownBlockRendererExtension } from "@plainbase/addon-sdk";
 import type {
   Document,
+  Role,
   RoleName,
   Ticket,
   User,
@@ -27,6 +28,7 @@ import {
   type DocumentEditorPaneHandle
 } from "../DocumentEditorPane";
 import { EditorFormattingToolbar } from "../EditorFormattingToolbar";
+import { AdminToolsPanel } from "../admin/AdminToolsPanel";
 import { AnimatedCreateTabButton } from "../layout/AnimatedCreateTabButton";
 import { TicketsWorkspaceContent } from "../tickets/TicketsWorkspaceView";
 import {
@@ -44,23 +46,61 @@ type DocumentWorkspaceProps = {
   markdownBlockRenderers: MarkdownBlockRendererExtension<string>[];
   mayEditDocument: boolean;
   mayManageUsers: boolean;
+  invitationMutationStatus: SaveState;
   saveState: SaveState;
+  roles: Role[];
   selectedDocument: Document | null;
   selectedWorkspace: Workspace | null;
+  selectedWorkspaceName: string | null;
   selectedWorkspaceId: string | null;
   showSourceEditor: boolean;
   tabs: WorkspaceTab[];
   roleSwitchStatus: SaveState;
   tickets: Ticket[];
+  userMutationStatus: SaveState;
   usersState: LoadState<User[]>;
+  workspaceMutationStatus: SaveState;
+  workspacesState: LoadState<Workspace[]>;
+  onCloseAdminTab: () => void;
   onCreateTab: () => void;
   onDraftChange: (draft: EditorDraft) => void;
   onDocumentSelect: (documentId: string) => void;
-  onOpenAdminTools: () => void;
+  onInvitationCreate: (input: {
+    name: string;
+    username: string;
+    email: string;
+    roleId: string;
+    avatarUrl: string | null;
+  }) => Promise<string | null>;
   onSaveDocument: () => void;
   onShowSourceEditorChange: (show: boolean) => void;
   onTabClose: (tabId: string) => void;
   onTabSelect: (tabId: string) => void;
+  onUserCreate: (input: {
+    name: string;
+    username: string;
+    email: string;
+    roleId: string;
+    password: string;
+    avatarUrl: string | null;
+  }) => Promise<boolean>;
+  onUserDelete: (userId: string) => Promise<boolean>;
+  onUserUpdate: (
+    userId: string,
+    input: {
+      name?: string;
+      username?: string;
+      email?: string;
+      roleId?: string;
+      password?: string;
+      avatarUrl?: string | null;
+    }
+  ) => Promise<boolean>;
+  onWorkspaceCreate: (input: {
+    name: string;
+    slug: string;
+    rootPath: string;
+  }) => Promise<boolean>;
 };
 
 export function DocumentWorkspace({
@@ -73,23 +113,34 @@ export function DocumentWorkspace({
   markdownBlockRenderers,
   mayEditDocument,
   mayManageUsers,
+  invitationMutationStatus,
   saveState,
+  roles,
   selectedDocument,
   selectedWorkspace,
+  selectedWorkspaceName,
   selectedWorkspaceId,
   showSourceEditor,
   tabs,
   roleSwitchStatus,
   tickets,
+  userMutationStatus,
   usersState,
+  workspaceMutationStatus,
+  workspacesState,
+  onCloseAdminTab,
   onCreateTab,
   onDraftChange,
   onDocumentSelect,
-  onOpenAdminTools,
+  onInvitationCreate,
   onSaveDocument,
   onShowSourceEditorChange,
   onTabClose,
-  onTabSelect
+  onTabSelect,
+  onUserCreate,
+  onUserDelete,
+  onUserUpdate,
+  onWorkspaceCreate
 }: DocumentWorkspaceProps) {
   const previewEditorRef = useRef<PreviewEditorHandle | null>(null);
   const sourceEditorRef = useRef<DocumentEditorPaneHandle | null>(null);
@@ -97,6 +148,7 @@ export function DocumentWorkspace({
   const enteringTimeoutRef = useRef<number | null>(null);
   const closingTimeoutRef = useRef<number | null>(null);
   const wordCount = countWords(draft?.content ?? "");
+  const isAdminTab = activeTabView === "admin";
   const isTicketsTab = activeTabView === "tickets";
   const isEmptyTab = activeTabView === "empty";
   const isKanbanBoard = selectedDocument?.kind === "kanban";
@@ -188,7 +240,24 @@ export function DocumentWorkspace({
         <AnimatedCreateTabButton onCreateTab={onCreateTab} />
       </div>
 
-      {isEmptyTab ? (
+      {isAdminTab ? (
+        <AdminToolsPanel
+          roles={roles}
+          selectedWorkspace={selectedWorkspace}
+          selectedWorkspaceName={selectedWorkspaceName}
+          invitationMutationStatus={invitationMutationStatus}
+          userMutationStatus={userMutationStatus}
+          usersState={usersState}
+          workspaceMutationStatus={workspaceMutationStatus}
+          workspacesState={workspacesState}
+          onClose={onCloseAdminTab}
+          onInvitationCreate={onInvitationCreate}
+          onUserCreate={onUserCreate}
+          onUserUpdate={onUserUpdate}
+          onUserDelete={onUserDelete}
+          onWorkspaceCreate={onWorkspaceCreate}
+        />
+      ) : isEmptyTab ? (
         <div className="document-shell document-shell-empty" />
       ) : isTicketsTab ? (
         <TicketsWorkspaceContent
@@ -250,33 +319,12 @@ export function DocumentWorkspace({
               )}
             </div>
             <div className="canvas-status-stack">
-              {mayManageUsers && (
-                <button
-                  type="button"
-                  className="workspace-admin-button"
-                  onClick={onOpenAdminTools}
-                >
-                  Admin-Tools
-                  {usersState.status === "success" && (
-                    <span className="workspace-admin-count">
-                      {usersState.data.length}
-                    </span>
-                  )}
-                </button>
-              )}
               <span className="role-pill">{activeRole ?? "Demo"}</span>
               {hasUnsavedChanges && (
                 <span className="unsaved-pill">Ungespeichert</span>
               )}
             </div>
           </div>
-
-          {mayManageUsers && (
-            <div className="workspace-admin-hint">
-              <strong>Admin:</strong> Oeffne die Admin-Tools, um Nutzer anzulegen,
-              zu bearbeiten oder zu entfernen.
-            </div>
-          )}
 
           {selectedDocument?.slug === "welcome" && (
             <div className="document-callout">

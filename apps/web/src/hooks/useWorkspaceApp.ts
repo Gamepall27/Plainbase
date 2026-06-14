@@ -5,7 +5,6 @@ import type {
   Document,
   DocumentKind,
   Role,
-  RoleName,
   Ticket,
   User,
   Workspace
@@ -67,6 +66,9 @@ export function useWorkspaceApp() {
     status: "idle"
   });
   const [userMutationStatus, setUserMutationStatus] = useState<SaveState>({
+    status: "idle"
+  });
+  const [invitationMutationStatus, setInvitationMutationStatus] = useState<SaveState>({
     status: "idle"
   });
   const [workspaceMutationStatus, setWorkspaceMutationStatus] = useState<SaveState>({
@@ -139,14 +141,14 @@ export function useWorkspaceApp() {
       workspacesResult,
       addonsResult,
       rolesResult,
-      demoUserResult,
+      authResult,
       usersResult
     ] =
       await Promise.allSettled([
         apiClient.getWorkspaces(),
         apiClient.getAddons(),
         apiClient.getRoles(),
-        apiClient.getDemoUser(),
+        apiClient.getAuthState(),
         apiClient.getUsers()
       ]);
 
@@ -180,12 +182,12 @@ export function useWorkspaceApp() {
       });
     }
 
-    if (demoUserResult.status === "fulfilled") {
-      setDemoUserState({ status: "success", data: demoUserResult.value });
+    if (authResult.status === "fulfilled") {
+      setDemoUserState({ status: "success", data: authResult.value });
     } else {
       setDemoUserState({
         status: "error",
-        message: getErrorMessage(demoUserResult.reason)
+        message: getErrorMessage(authResult.reason)
       });
     }
 
@@ -252,32 +254,11 @@ export function useWorkspaceApp() {
     }
   }
 
-  async function changeRole(roleName: RoleName) {
-    setRoleSwitchStatus({ status: "saving" });
-
-    try {
-      const demoUser = await apiClient.switchDemoRole(roleName);
-      setDemoUserState({ status: "success", data: demoUser });
-      setRoleSwitchStatus({
-        status: "success",
-        message:
-          demoUser.authType === "demo"
-            ? `Aktive Rolle ist jetzt ${demoUser.role.name}.`
-            : "Demo-Session wurde aktualisiert."
-      });
-    } catch (error) {
-      setRoleSwitchStatus({
-        status: "error",
-        message: getErrorMessage(error)
-      });
-    }
-  }
-
   async function signIn(identifier: string, password: string) {
     setRoleSwitchStatus({ status: "saving" });
 
     try {
-      const demoAuth = await apiClient.signInDemoUser({
+      const demoAuth = await apiClient.signIn({
         identifier,
         password
       });
@@ -285,7 +266,7 @@ export function useWorkspaceApp() {
       setRoleSwitchStatus({
         status: "success",
         message:
-          demoAuth.authType === "demo"
+          demoAuth.authType === "session"
             ? `Angemeldet als ${demoAuth.user.name}.`
             : "Anmeldung fehlgeschlagen."
       });
@@ -303,17 +284,80 @@ export function useWorkspaceApp() {
     setRoleSwitchStatus({ status: "saving" });
 
     try {
-      const demoAuth = await apiClient.signOutDemoUser();
+      const demoAuth = await apiClient.signOut();
       setDemoUserState({ status: "success", data: demoAuth });
       setRoleSwitchStatus({
         status: "success",
-        message: "Demo-Session wurde beendet."
+        message: "Sitzung wurde beendet."
       });
     } catch (error) {
       setRoleSwitchStatus({
         status: "error",
         message: getErrorMessage(error)
       });
+    }
+  }
+
+  async function requestPasswordReset(identifier: string) {
+    setRoleSwitchStatus({ status: "saving" });
+
+    try {
+      const result = await apiClient.requestPasswordReset({ identifier });
+      setRoleSwitchStatus({
+        status: "success",
+        message: result.resetUrl
+          ? "Reset-Link wurde erstellt."
+          : "Wenn ein Konto existiert, wurde ein Reset-Link erstellt."
+      });
+      return result.resetUrl;
+    } catch (error) {
+      setRoleSwitchStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return null;
+    }
+  }
+
+  async function resetPassword(token: string, password: string) {
+    setRoleSwitchStatus({ status: "saving" });
+
+    try {
+      await apiClient.resetPassword({ token, password });
+      setRoleSwitchStatus({
+        status: "success",
+        message: "Passwort wurde aktualisiert. Bitte melde dich an."
+      });
+      return true;
+    } catch (error) {
+      setRoleSwitchStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
+  async function acceptInvitation(token: string, password: string) {
+    setRoleSwitchStatus({ status: "saving" });
+
+    try {
+      const authState = await apiClient.acceptInvitation({ token, password });
+      setDemoUserState({ status: "success", data: authState });
+      setRoleSwitchStatus({
+        status: "success",
+        message:
+          authState.authType === "session"
+            ? `Willkommen, ${authState.user.name}.`
+            : "Einladung konnte nicht angenommen werden."
+      });
+      return true;
+    } catch (error) {
+      setRoleSwitchStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
     }
   }
 
@@ -774,6 +818,31 @@ export function useWorkspaceApp() {
     }
   }
 
+  async function createInvitation(input: {
+    name: string;
+    username: string;
+    email: string;
+    roleId: string;
+    avatarUrl: string | null;
+  }) {
+    setInvitationMutationStatus({ status: "saving" });
+
+    try {
+      const invitation = await apiClient.createInvitation(input);
+      setInvitationMutationStatus({
+        status: "success",
+        message: `Einladung fuer "${invitation.email}" wurde erstellt.`
+      });
+      return invitation.acceptUrl;
+    } catch (error) {
+      setInvitationMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return null;
+    }
+  }
+
   async function createWorkspace(input: {
     name: string;
     slug: string;
@@ -849,6 +918,8 @@ export function useWorkspaceApp() {
     kind:
       tab.view === "tickets"
         ? "tickets"
+        : tab.view === "admin"
+          ? "admin"
         : tab.draft?.kind ??
           documents.find((document) => document.id === tab.documentId)?.kind ??
           "document",
@@ -856,6 +927,8 @@ export function useWorkspaceApp() {
     title:
       tab.view === "tickets"
         ? "Tickets"
+        : tab.view === "admin"
+          ? "Admin-Tools"
         : tab.draft?.title.trim() ||
           documents.find((document) => document.id === tab.documentId)?.title ||
           "Neuer Tab",
@@ -884,6 +957,7 @@ export function useWorkspaceApp() {
       saveState,
       roleSwitchStatus,
       userMutationStatus,
+      invitationMutationStatus,
       workspaceMutationStatus,
       pendingAddonId
     },
@@ -914,14 +988,18 @@ export function useWorkspaceApp() {
     actions: {
       setSelectedWorkspaceId,
       setSelectedDocumentId,
+      openDocumentInNewTab,
       createTab,
       openTicketsTab,
+      openAdminTab,
       focusDocumentTab,
       setActiveTabId: setTabActive,
       closeTab,
       signIn,
-      changeRole,
       signOut,
+      requestPasswordReset,
+      resetPassword,
+      acceptInvitation,
       createEntry,
       renameDocumentInTree,
       deleteDocumentInTree,
@@ -930,6 +1008,7 @@ export function useWorkspaceApp() {
       updateDraft,
       toggleAddon,
       createUser,
+      createInvitation,
       updateUser,
       deleteUser,
       createWorkspace
@@ -966,9 +1045,29 @@ export function useWorkspaceApp() {
     setSaveState({ status: "idle" });
   }
 
+  function openAdminTab() {
+    const existingAdminTab = openTabsRef.current.find(
+      (tab) => tab.view === "admin"
+    );
+
+    if (existingAdminTab) {
+      updateTabs(openTabsRef.current, existingAdminTab.id);
+      setSaveState({ status: "idle" });
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const nextTab = createAdminTab(selectedWorkspaceId);
+    updateTabs([...openTabsRef.current, nextTab], nextTab.id);
+    setSaveState({ status: "idle" });
+  }
+
   function focusDocumentTab() {
     const existingDocumentTab = openTabsRef.current.find(
-      (tab) => tab.view !== "tickets"
+      (tab) => tab.view === "document" || tab.view === "empty"
     );
 
     if (existingDocumentTab) {
@@ -1062,7 +1161,51 @@ export function useWorkspaceApp() {
       return;
     }
 
-    activateDocument(document);
+    const activeTab = getActiveTab(openTabsRef.current, activeTabIdRef.current);
+
+    if (!activeTab) {
+      activateDocument(document);
+      return;
+    }
+
+    if (activeTab.view === "tickets" || activeTab.view === "admin") {
+      const nextTab = createDocumentTab(document);
+      updateTabs([...openTabsRef.current, nextTab], nextTab.id);
+      return;
+    }
+
+    updateTabs(
+      openTabsRef.current.map((tab) =>
+        tab.id === activeTab.id
+          ? {
+              ...tab,
+              view: "document",
+              workspaceId: document.workspaceId,
+              documentId: document.id,
+              draft: mapDocumentToDraft(document),
+              isDirty: false
+            }
+          : tab
+      ),
+      activeTab.id
+    );
+  }
+
+  function openDocumentInNewTab(documentId: string | null) {
+    if (!documentId || documentsState.status !== "success") {
+      return;
+    }
+
+    const document = documentsState.data.find(
+      (entry) => entry.id === documentId && entry.kind !== "folder"
+    );
+
+    if (!document) {
+      return;
+    }
+
+    const nextTab = createDocumentTab(document);
+    updateTabs([...openTabsRef.current, nextTab], nextTab.id);
   }
 
   function updateTab(
@@ -1230,6 +1373,17 @@ function createTicketsTab(workspaceId: string): EditorTabState {
   return {
     id: createTabId(),
     view: "tickets",
+    workspaceId,
+    documentId: null,
+    draft: null,
+    isDirty: false
+  };
+}
+
+function createAdminTab(workspaceId: string): EditorTabState {
+  return {
+    id: createTabId(),
+    view: "admin",
     workspaceId,
     documentId: null,
     draft: null,

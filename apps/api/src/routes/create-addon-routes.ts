@@ -23,7 +23,7 @@ export function createAddonRoutes(addonService: AddonService) {
     "/addons/:addonId/toggle",
     requirePermission(
       canManageAddons,
-      "The active demo user cannot manage addons."
+      "The active user cannot manage addons."
     ),
     (request, response) => {
       const addonId = readRouteParam(request.params, "addonId");

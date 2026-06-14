@@ -1,13 +1,15 @@
 import { AddonRepository } from "../db/repositories/addon-repository.js";
-import { AppStateRepository } from "../db/repositories/app-state-repository.js";
+import { AuthSessionRepository } from "../db/repositories/auth-session-repository.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
+import { PasswordResetRepository } from "../db/repositories/password-reset-repository.js";
 import { RoleRepository } from "../db/repositories/role-repository.js";
 import { TicketRepository } from "../db/repositories/ticket-repository.js";
+import { UserInvitationRepository } from "../db/repositories/user-invitation-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { PlainbaseDatabase } from "../db/plainbase-database.js";
 import { AddonService } from "./addon-service.js";
-import { DemoAuthService } from "./demo-auth-service.js";
+import { AuthService } from "./auth-service.js";
 import { DemoDataService } from "./demo-data-service.js";
 import { DocumentService } from "./document-service.js";
 import { RoleService } from "./role-service.js";
@@ -29,7 +31,9 @@ export function createServices(
   const roleRepository = new RoleRepository(connection);
   const addonRepository = new AddonRepository(connection);
   const ticketRepository = new TicketRepository(connection);
-  const appStateRepository = new AppStateRepository(connection);
+  const authSessionRepository = new AuthSessionRepository(connection);
+  const passwordResetRepository = new PasswordResetRepository(connection);
+  const userInvitationRepository = new UserInvitationRepository(connection);
 
   return {
     workspaceService: new WorkspaceService(workspaceRepository, contentRoot),
@@ -44,10 +48,12 @@ export function createServices(
       documentRepository,
       ticketRepository
     ),
-    demoAuthService: new DemoAuthService(
+    authService: new AuthService(
       userRepository,
       roleRepository,
-      appStateRepository
+      authSessionRepository,
+      passwordResetRepository,
+      userInvitationRepository
     ),
     roleService: new RoleService(roleRepository),
     addonService: new AddonService(addonRepository),
