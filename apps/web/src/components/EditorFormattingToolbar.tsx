@@ -25,7 +25,6 @@ export function EditorFormattingToolbar({
 }: EditorFormattingToolbarProps) {
   return (
     <div className="editor-formatting-toolbar">
-      <span className="toolbar-mode-label">Preview bearbeiten</span>
       {actions.map((item) => (
         <button
           key={item.action}

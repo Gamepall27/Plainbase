@@ -505,13 +505,6 @@ function DocumentToolbar({
       <div className="toolbar-right">
         <button
           type="button"
-          className="toolbar-secondary-button"
-          onClick={onToggleSource}
-        >
-          {showSourceEditor ? "Preview" : "Markdown"}
-        </button>
-        <button
-          type="button"
           className="toolbar-primary-button"
           onClick={onSaveDocument}
           disabled={!canSave}
