@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 export type UserInvitationRecord = {
   id: string;
+  tenantId: string;
   name: string;
   username: string;
   email: string;
@@ -24,6 +25,7 @@ export class UserInvitationRepository {
         `
           INSERT INTO user_invitations (
             id,
+            tenant_id,
             name,
             username,
             email,
@@ -36,11 +38,12 @@ export class UserInvitationRepository {
             expires_at,
             accepted_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
       )
       .run(
         input.id,
+        input.tenantId,
         input.name,
         input.username,
         input.email,
@@ -61,6 +64,7 @@ export class UserInvitationRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
@@ -87,6 +91,7 @@ export class UserInvitationRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,

@@ -4,6 +4,7 @@ import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { PasswordResetRepository } from "../db/repositories/password-reset-repository.js";
 import { RoleRepository } from "../db/repositories/role-repository.js";
 import { TicketRepository } from "../db/repositories/ticket-repository.js";
+import { TenantRepository } from "../db/repositories/tenant-repository.js";
 import { UserInvitationRepository } from "../db/repositories/user-invitation-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
@@ -29,6 +30,7 @@ export function createServices(
   const documentRepository = new DocumentRepository(connection);
   const userRepository = new UserRepository(connection);
   const roleRepository = new RoleRepository(connection);
+  const tenantRepository = new TenantRepository(connection);
   const addonRepository = new AddonRepository(connection);
   const ticketRepository = new TicketRepository(connection);
   const authSessionRepository = new AuthSessionRepository(connection);
@@ -50,6 +52,7 @@ export function createServices(
     ),
     authService: new AuthService(
       userRepository,
+      tenantRepository,
       roleRepository,
       authSessionRepository,
       passwordResetRepository,
@@ -64,6 +67,7 @@ export function createServices(
       userRepository
     ),
     demoDataService: new DemoDataService(
+      tenantRepository,
       workspaceRepository,
       documentRepository,
       userRepository,

@@ -4,6 +4,8 @@ import type {
   CreateUserRequest,
   UpdateUserRequest
 } from "@plainbase/shared";
+import type { AuthContext } from "../auth/auth-context.js";
+import { requireAuthenticatedUser } from "../auth/auth-context.js";
 import { hashPassword } from "../auth/passwords.js";
 import { DocumentRepository } from "../db/repositories/document-repository.js";
 import { RoleRepository } from "../db/repositories/role-repository.js";
@@ -29,11 +31,13 @@ export class UserService {
     private readonly ticketRepository: TicketRepository
   ) {}
 
-  listUsers() {
-    return this.userRepository.list();
+  listUsers(actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
+    return this.userRepository.listByTenantId(authenticatedUser.tenant.id);
   }
 
-  createUser(input: unknown) {
+  createUser(input: unknown, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     const body = expectObject(input);
     const user = this.parseCreateUserInput(body);
 
@@ -54,6 +58,7 @@ export class UserService {
     const createdUser = this.userRepository.create({
       ...user,
       id: `user-${randomUUID()}`,
+      tenantId: authenticatedUser.tenant.id,
       passwordHash: hashPassword(user.password),
       avatarUrl: user.avatarUrl ?? null
     });
@@ -65,12 +70,8 @@ export class UserService {
     return createdUser;
   }
 
-  updateUser(userId: string, input: unknown) {
-    const existingUser = this.userRepository.findById(userId);
-
-    if (!existingUser) {
-      throw new ApiError(404, "NOT_FOUND", "User not found.");
-    }
+  updateUser(userId: string, input: unknown, actor: AuthContext) {
+    const existingUser = this.requireTenantUser(userId, actor);
 
     const body = expectObject(input);
     requireAtLeastOneField(
@@ -118,13 +119,10 @@ export class UserService {
   }
 
   deleteUser(userId: string, actor: AuthState) {
-    const existingUser = this.userRepository.findById(userId);
+    const authenticatedActor = requireAuthenticatedUser(actor);
+    const existingUser = this.requireTenantUser(userId, actor);
 
-    if (!existingUser) {
-      throw new ApiError(404, "NOT_FOUND", "User not found.");
-    }
-
-    if (actor.authType === "session" && actor.user.id === userId) {
+    if (authenticatedActor.user.id === userId) {
       throw new ApiError(
         409,
         "CONFLICT",
@@ -150,6 +148,17 @@ export class UserService {
 
     this.userRepository.delete(userId);
     return userId;
+  }
+
+  private requireTenantUser(userId: string, actor: AuthContext) {
+    const authenticatedActor = requireAuthenticatedUser(actor);
+    const user = this.userRepository.findById(userId);
+
+    if (!user || user.tenantId !== authenticatedActor.tenant.id) {
+      throw new ApiError(404, "NOT_FOUND", "User not found.");
+    }
+
+    return user;
   }
 
   private parseCreateUserInput(

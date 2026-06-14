@@ -27,8 +27,8 @@ export class TicketService {
     private readonly userRepository: UserRepository
   ) {}
 
-  listTicketsByWorkspace(workspaceId: string) {
-    this.ensureWorkspaceExists(workspaceId);
+  listTicketsByWorkspace(workspaceId: string, actor: AuthContext) {
+    this.requireWorkspace(workspaceId, actor);
     return this.ticketRepository.listByWorkspaceId(workspaceId);
   }
 
@@ -42,9 +42,9 @@ export class TicketService {
     const documentId = readOptionalNullableString(body, "documentId");
     const assigneeId = readOptionalNullableString(body, "assigneeId");
 
-    this.ensureWorkspaceExists(workspaceId);
-    this.ensureOptionalUserExists(assigneeId, "assigneeId");
-    this.ensureDocumentMatchesWorkspace(documentId, workspaceId, "documentId");
+    const workspace = this.requireWorkspace(workspaceId, actor);
+    this.ensureOptionalUserExists(assigneeId, workspace.tenantId, "assigneeId");
+    this.ensureDocumentMatchesWorkspace(documentId, workspace.id, "documentId");
 
     const timestamp = new Date().toISOString();
 
@@ -62,8 +62,9 @@ export class TicketService {
     });
   }
 
-  updateTicket(ticketId: string, input: unknown, _actor: AuthContext) {
+  updateTicket(ticketId: string, input: unknown, actor: AuthContext) {
     const existingTicket = this.requireTicket(ticketId);
+    const workspace = this.requireWorkspace(existingTicket.workspaceId, actor);
     const body = expectObject(input);
 
     requireAtLeastOneField(
@@ -84,7 +85,7 @@ export class TicketService {
     const assigneeId =
       assigneeIdInput === undefined ? existingTicket.assigneeId : assigneeIdInput;
 
-    this.ensureOptionalUserExists(assigneeId, "assigneeId");
+    this.ensureOptionalUserExists(assigneeId, workspace.tenantId, "assigneeId");
     this.ensureDocumentMatchesWorkspace(
       documentId,
       existingTicket.workspaceId,
@@ -118,26 +119,37 @@ export class TicketService {
     return ticket;
   }
 
-  private ensureWorkspaceExists(workspaceId: string) {
-    if (!this.workspaceRepository.findById(workspaceId)) {
+  private requireWorkspace(workspaceId: string, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
+    const workspace = this.workspaceRepository.findById(workspaceId);
+
+    if (!workspace || workspace.tenantId !== authenticatedUser.tenant.id) {
       throw new ApiError(404, "NOT_FOUND", "Workspace not found.");
     }
+
+    return workspace;
   }
 
-  private ensureUserExists(userId: string, field: string) {
-    if (!this.userRepository.findById(userId)) {
+  private ensureUserExists(userId: string, tenantId: string, field: string) {
+    const user = this.userRepository.findById(userId);
+
+    if (!user || user.tenantId !== tenantId) {
       throw new ApiError(404, "NOT_FOUND", "User not found.", {
         [field]: `User ${userId} does not exist.`
       });
     }
   }
 
-  private ensureOptionalUserExists(userId: string | null | undefined, field: string) {
+  private ensureOptionalUserExists(
+    userId: string | null | undefined,
+    tenantId: string,
+    field: string
+  ) {
     if (!userId) {
       return;
     }
 
-    this.ensureUserExists(userId, field);
+    this.ensureUserExists(userId, tenantId, field);
   }
 
   private ensureDocumentMatchesWorkspace(

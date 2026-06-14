@@ -5,21 +5,27 @@ export class WorkspaceRepository {
   constructor(private readonly database: DatabaseSync) {}
 
   list() {
+    return this.listByTenantId(null);
+  }
+
+  listByTenantId(tenantId: string | null) {
     return this.database
       .prepare(
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             slug,
             root_path AS rootPath,
             created_at AS createdAt,
             updated_at AS updatedAt
           FROM workspaces
+          ${tenantId ? "WHERE tenant_id = ?" : ""}
           ORDER BY name
         `
       )
-      .all() as Workspace[];
+      .all(...(tenantId ? [tenantId] : [])) as Workspace[];
   }
 
   findById(id: string) {
@@ -28,6 +34,7 @@ export class WorkspaceRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             slug,
             root_path AS rootPath,
@@ -48,6 +55,7 @@ export class WorkspaceRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             slug,
             root_path AS rootPath,
@@ -68,6 +76,7 @@ export class WorkspaceRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             slug,
             root_path AS rootPath,
@@ -86,12 +95,13 @@ export class WorkspaceRepository {
     this.database
       .prepare(
         `
-          INSERT INTO workspaces (id, name, slug, root_path, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO workspaces (id, tenant_id, name, slug, root_path, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `
       )
       .run(
         workspace.id,
+        workspace.tenantId,
         workspace.name,
         workspace.slug,
         workspace.rootPath,

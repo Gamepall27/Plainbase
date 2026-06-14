@@ -16,8 +16,16 @@ test("requirePermission allows matching roles and rejects missing permission", (
     {
       auth: {
         authType: "session",
+        tenant: {
+          id: "tenant-1",
+          name: "Tenant One",
+          slug: "tenant-one",
+          createdAt: "2026-06-14T12:00:00.000Z",
+          updatedAt: "2026-06-14T12:00:00.000Z"
+        },
         user: {
           id: "user-1",
+          tenantId: "tenant-1",
           name: "Admin User",
           username: "admin",
           email: "admin@example.com",
@@ -41,6 +49,7 @@ test("requirePermission allows matching roles and rejects missing permission", (
     {
       auth: {
         authType: "guest",
+        tenant: null,
         user: null,
         role: null,
         session: null

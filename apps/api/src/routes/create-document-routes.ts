@@ -21,7 +21,7 @@ export function createDocumentRoutes(documentService: DocumentService) {
     const payload: DocumentsResponse = {
       success: true,
       data: {
-        documents: documentService.listDocumentsByWorkspace(workspaceId)
+        documents: documentService.listDocumentsByWorkspace(workspaceId, request.auth)
       }
     };
 
@@ -33,7 +33,7 @@ export function createDocumentRoutes(documentService: DocumentService) {
     const payload: DocumentResponse = {
       success: true,
       data: {
-        document: documentService.getDocument(documentId)
+        document: documentService.getDocument(documentId, request.auth)
       }
     };
 
@@ -89,7 +89,7 @@ export function createDocumentRoutes(documentService: DocumentService) {
       const payload: DeleteDocumentResponse = {
         success: true,
         data: {
-          deletedDocumentId: documentService.deleteDocument(documentId)
+          deletedDocumentId: documentService.deleteDocument(documentId, request.auth)
         }
       };
 

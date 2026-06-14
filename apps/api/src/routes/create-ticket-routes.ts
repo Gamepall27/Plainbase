@@ -13,7 +13,7 @@ export function createTicketRoutes(ticketService: TicketService) {
     const payload: TicketsResponse = {
       success: true,
       data: {
-        tickets: ticketService.listTicketsByWorkspace(workspaceId)
+        tickets: ticketService.listTicketsByWorkspace(workspaceId, request.auth)
       }
     };
 

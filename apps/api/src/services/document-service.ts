@@ -34,15 +34,15 @@ export class DocumentService {
     this.documentFilesystemStore = new DocumentFilesystemStore(contentRoot);
   }
 
-  listDocumentsByWorkspace(workspaceId: string) {
-    const workspace = this.requireWorkspace(workspaceId);
+  listDocumentsByWorkspace(workspaceId: string, actor: AuthContext) {
+    const workspace = this.requireWorkspace(workspaceId, actor);
     this.syncWorkspace(workspace);
     return this.documentRepository.listByWorkspaceId(workspaceId);
   }
 
-  getDocument(documentId: string) {
+  getDocument(documentId: string, actor: AuthContext) {
     const document = this.requireDocument(documentId);
-    const workspace = this.requireWorkspace(document.workspaceId);
+    const workspace = this.requireWorkspace(document.workspaceId, actor);
     this.syncWorkspace(workspace);
     return this.requireDocument(documentId);
   }
@@ -50,7 +50,10 @@ export class DocumentService {
   createDocument(input: unknown, actor: AuthContext) {
     const authenticatedUser = requireAuthenticatedUser(actor);
     const body = expectObject(input);
-    const workspace = this.requireWorkspace(readRequiredString(body, "workspaceId"));
+    const workspace = this.requireWorkspace(
+      readRequiredString(body, "workspaceId"),
+      actor
+    );
     this.syncWorkspace(workspace);
 
     const kind = this.readDocumentKind(body, "kind") ?? "document";
@@ -102,7 +105,7 @@ export class DocumentService {
   updateDocument(documentId: string, input: unknown, actor: AuthContext) {
     const authenticatedUser = requireAuthenticatedUser(actor);
     const document = this.requireDocument(documentId);
-    const workspace = this.requireWorkspace(document.workspaceId);
+    const workspace = this.requireWorkspace(document.workspaceId, actor);
     this.syncWorkspace(workspace);
 
     const currentDocument = this.requireDocument(documentId);
@@ -188,9 +191,10 @@ export class DocumentService {
     return updatedDocument;
   }
 
-  deleteDocument(documentId: string) {
+  deleteDocument(documentId: string, actor: AuthContext) {
+    requireAuthenticatedUser(actor);
     const document = this.requireDocument(documentId);
-    const workspace = this.requireWorkspace(document.workspaceId);
+    const workspace = this.requireWorkspace(document.workspaceId, actor);
     this.syncWorkspace(workspace);
 
     const currentDocument = this.requireDocument(documentId);
@@ -390,10 +394,11 @@ export class DocumentService {
     return document;
   }
 
-  private requireWorkspace(workspaceId: string) {
+  private requireWorkspace(workspaceId: string, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     const workspace = this.workspaceRepository.findById(workspaceId);
 
-    if (!workspace) {
+    if (!workspace || workspace.tenantId !== authenticatedUser.tenant.id) {
       throw new ApiError(404, "NOT_FOUND", "Workspace not found.");
     }
 

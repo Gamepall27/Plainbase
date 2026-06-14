@@ -114,8 +114,8 @@ export function useWorkspaceApp() {
     updateTabs([], null);
 
     if (!selectedWorkspaceId) {
-      setDocumentsState({ status: "error", message: "Kein Workspace gewaehlt." });
-      setTicketsState({ status: "error", message: "Kein Workspace gewaehlt." });
+      setDocumentsState({ status: "success", data: [] });
+      setTicketsState({ status: "success", data: [] });
       return;
     }
 
@@ -137,32 +137,11 @@ export function useWorkspaceApp() {
   }, [selectedWorkspaceId]);
 
   async function loadShellData() {
-    const [
-      workspacesResult,
-      addonsResult,
-      rolesResult,
-      authResult,
-      usersResult
-    ] =
-      await Promise.allSettled([
-        apiClient.getWorkspaces(),
-        apiClient.getAddons(),
-        apiClient.getRoles(),
-        apiClient.getAuthState(),
-        apiClient.getUsers()
-      ]);
-
-    if (workspacesResult.status === "fulfilled") {
-      setWorkspacesState({ status: "success", data: workspacesResult.value });
-
-      const firstWorkspaceId = workspacesResult.value[0]?.id ?? null;
-      setSelectedWorkspaceId((current) => current ?? firstWorkspaceId);
-    } else {
-      setWorkspacesState({
-        status: "error",
-        message: getErrorMessage(workspacesResult.reason)
-      });
-    }
+    const [addonsResult, rolesResult, authResult] = await Promise.allSettled([
+      apiClient.getAddons(),
+      apiClient.getRoles(),
+      apiClient.getAuthState()
+    ]);
 
     if (addonsResult.status === "fulfilled") {
       setAddonsState({ status: "success", data: addonsResult.value });
@@ -188,6 +167,38 @@ export function useWorkspaceApp() {
       setDemoUserState({
         status: "error",
         message: getErrorMessage(authResult.reason)
+      });
+      setWorkspacesState({ status: "success", data: [] });
+      setUsersState({ status: "success", data: [] });
+      setSelectedWorkspaceId(null);
+      return;
+    }
+
+    if (authResult.value.authType !== "session") {
+      setWorkspacesState({ status: "success", data: [] });
+      setUsersState({ status: "success", data: [] });
+      setSelectedWorkspaceId(null);
+      return;
+    }
+
+    const [workspacesResult, usersResult] = await Promise.allSettled([
+      apiClient.getWorkspaces(),
+      apiClient.getUsers()
+    ]);
+
+    if (workspacesResult.status === "fulfilled") {
+      setWorkspacesState({ status: "success", data: workspacesResult.value });
+
+      const firstWorkspaceId = workspacesResult.value[0]?.id ?? null;
+      setSelectedWorkspaceId((current) =>
+        current && workspacesResult.value.some((workspace) => workspace.id === current)
+          ? current
+          : firstWorkspaceId
+      );
+    } else {
+      setWorkspacesState({
+        status: "error",
+        message: getErrorMessage(workspacesResult.reason)
       });
     }
 
@@ -263,6 +274,7 @@ export function useWorkspaceApp() {
         password
       });
       setDemoUserState({ status: "success", data: demoAuth });
+      await loadShellData();
       setRoleSwitchStatus({
         status: "success",
         message:
@@ -286,6 +298,7 @@ export function useWorkspaceApp() {
     try {
       const demoAuth = await apiClient.signOut();
       setDemoUserState({ status: "success", data: demoAuth });
+      await loadShellData();
       setRoleSwitchStatus({
         status: "success",
         message: "Sitzung wurde beendet."
@@ -344,6 +357,7 @@ export function useWorkspaceApp() {
     try {
       const authState = await apiClient.acceptInvitation({ token, password });
       setDemoUserState({ status: "success", data: authState });
+      await loadShellData();
       setRoleSwitchStatus({
         status: "success",
         message:

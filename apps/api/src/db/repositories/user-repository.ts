@@ -7,6 +7,7 @@ type UserRow = User & {
 
 type CreateUserRecordInput = {
   id: string;
+  tenantId: string;
   name: string;
   username: string;
   email: string;
@@ -16,6 +17,7 @@ type CreateUserRecordInput = {
 };
 
 type UpdateUserRecordInput = {
+  tenantId?: string;
   name?: string;
   username?: string;
   email?: string;
@@ -28,21 +30,27 @@ export class UserRepository {
   constructor(private readonly database: DatabaseSync) {}
 
   list() {
+    return this.listByTenantId(null);
+  }
+
+  listByTenantId(tenantId: string | null) {
     return this.database
       .prepare(
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
             role_id AS roleId,
             avatar_url AS avatarUrl
           FROM users
+          ${tenantId ? "WHERE tenant_id = ?" : ""}
           ORDER BY name
         `
       )
-      .all() as User[];
+      .all(...(tenantId ? [tenantId] : [])) as User[];
   }
 
   findById(id: string) {
@@ -51,6 +59,7 @@ export class UserRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
@@ -71,6 +80,7 @@ export class UserRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
@@ -93,6 +103,7 @@ export class UserRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
@@ -113,6 +124,7 @@ export class UserRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
@@ -133,6 +145,7 @@ export class UserRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,
@@ -153,12 +166,13 @@ export class UserRepository {
     this.database
       .prepare(
         `
-          INSERT INTO users (id, name, username, email, password_hash, role_id, avatar_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO users (id, tenant_id, name, username, email, password_hash, role_id, avatar_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `
       )
       .run(
         input.id,
+        input.tenantId,
         input.name,
         input.username,
         input.email,
@@ -182,6 +196,7 @@ export class UserRepository {
         `
           UPDATE users
           SET
+            tenant_id = ?,
             name = ?,
             username = ?,
             email = ?,
@@ -192,6 +207,7 @@ export class UserRepository {
         `
       )
       .run(
+        input.tenantId ?? existingUser.tenantId,
         input.name ?? existingUser.name,
         input.username ?? existingUser.username,
         input.email ?? existingUser.email,
@@ -221,6 +237,7 @@ export class UserRepository {
         `
           SELECT
             id,
+            tenant_id AS tenantId,
             name,
             username,
             email,

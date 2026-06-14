@@ -7,7 +7,8 @@ import type {
   PasswordResetRequest,
   PasswordResetRequestResponse,
   ResetPasswordResponse,
-  SignInRequest
+  SignInRequest,
+  Tenant
 } from "@plainbase/shared";
 import { apiConfig } from "../config.js";
 import { requireAuthenticatedUser, type AuthContext } from "../auth/auth-context.js";
@@ -16,6 +17,7 @@ import { createOpaqueToken, hashToken } from "../auth/tokens.js";
 import { AuthSessionRepository } from "../db/repositories/auth-session-repository.js";
 import { PasswordResetRepository } from "../db/repositories/password-reset-repository.js";
 import { RoleRepository } from "../db/repositories/role-repository.js";
+import { TenantRepository } from "../db/repositories/tenant-repository.js";
 import { UserInvitationRepository } from "../db/repositories/user-invitation-repository.js";
 import { UserRepository } from "../db/repositories/user-repository.js";
 import { ApiError } from "../errors/api-error.js";
@@ -31,6 +33,7 @@ import {
 export class AuthService {
   constructor(
     private readonly userRepository: UserRepository,
+    private readonly tenantRepository: TenantRepository,
     private readonly roleRepository: RoleRepository,
     private readonly authSessionRepository: AuthSessionRepository,
     private readonly passwordResetRepository: PasswordResetRepository,
@@ -189,6 +192,7 @@ export class AuthService {
     this.userInvitationRepository.deleteExpired(createdAt);
     this.userInvitationRepository.create({
       id: invitationRecordId,
+      tenantId: authenticatedActor.tenant.id,
       name: invitation.name,
       username: invitation.username,
       email: invitation.email,
@@ -204,6 +208,7 @@ export class AuthService {
 
     return {
       id: invitationRecordId,
+      tenantId: authenticatedActor.tenant.id,
       name: invitation.name,
       username: invitation.username,
       email: invitation.email,
@@ -248,6 +253,7 @@ export class AuthService {
 
     const createdUser = this.userRepository.create({
       id: `user-${randomUUID()}`,
+      tenantId: invitation.tenantId,
       name: invitation.name,
       username: invitation.username,
       email: invitation.email,
@@ -297,8 +303,11 @@ export class AuthService {
       throw new ApiError(404, "NOT_FOUND", "Role not found.");
     }
 
+    const tenant = this.requireTenant(user.tenantId);
+
     return {
       authType: "session",
+      tenant,
       user,
       role,
       session: {
@@ -310,10 +319,21 @@ export class AuthService {
   private buildGuestAuthState() {
     return {
       authType: "guest",
+      tenant: null,
       user: null,
       role: null,
       session: null
     } satisfies AuthResponse["data"];
+  }
+
+  private requireTenant(tenantId: string): Tenant {
+    const tenant = this.tenantRepository.findById(tenantId);
+
+    if (!tenant) {
+      throw new ApiError(404, "NOT_FOUND", "Tenant not found.");
+    }
+
+    return tenant;
   }
 
   private parseInvitationInput(

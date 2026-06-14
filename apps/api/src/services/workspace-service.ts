@@ -1,6 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { CreateWorkspaceRequest, Workspace } from "@plainbase/shared";
+import type { AuthContext } from "../auth/auth-context.js";
+import { requireAuthenticatedUser } from "../auth/auth-context.js";
 import { ApiError } from "../errors/api-error.js";
 import { WorkspaceRepository } from "../db/repositories/workspace-repository.js";
 import { expectObject, readRequiredString, validateSlug } from "./validation.js";
@@ -15,13 +17,15 @@ export class WorkspaceService {
     private readonly contentRoot: string
   ) {}
 
-  listWorkspaces() {
+  listWorkspaces(actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     return this.workspaceRepository
-      .list()
+      .listByTenantId(authenticatedUser.tenant.id)
       .map((workspace) => this.hydrateWorkspace(workspace));
   }
 
-  createWorkspace(input: unknown) {
+  createWorkspace(input: unknown, actor: AuthContext) {
+    const authenticatedUser = requireAuthenticatedUser(actor);
     const body = expectObject(input);
     const name = readRequiredString(body, "name", "Workspace name");
     const slug = readRequiredString(body, "slug", "Workspace slug");
@@ -51,16 +55,13 @@ export class WorkspaceService {
     return this.workspaceRepository.create(
       this.hydrateWorkspace({
         id: `workspace-${randomUUID()}`,
+        tenantId: authenticatedUser.tenant.id,
         name,
         slug,
         rootPath,
         createdAt: timestamp,
         updatedAt: timestamp
-      } satisfies CreateWorkspaceRequest & {
-        id: string;
-        createdAt: string;
-        updatedAt: string;
-      })
+      } satisfies Workspace)
     );
   }
 

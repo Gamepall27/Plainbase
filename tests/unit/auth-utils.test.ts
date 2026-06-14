@@ -63,8 +63,16 @@ test("session cookie helpers read, set and clear cookies", () => {
 test("requireAuthenticatedUser accepts session auth and rejects guests", () => {
   const sessionAuth = {
     authType: "session" as const,
+    tenant: {
+      id: "tenant-1",
+      name: "Tenant One",
+      slug: "tenant-one",
+      createdAt: "2026-06-14T12:00:00.000Z",
+      updatedAt: "2026-06-14T12:00:00.000Z"
+    },
     user: {
       id: "user-1",
+      tenantId: "tenant-1",
       name: "Admin User",
       username: "admin",
       email: "admin@example.com",
@@ -86,6 +94,7 @@ test("requireAuthenticatedUser accepts session auth and rejects guests", () => {
     () =>
       requireAuthenticatedUser({
         authType: "guest",
+        tenant: null,
         user: null,
         role: null,
         session: null

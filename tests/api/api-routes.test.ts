@@ -53,6 +53,8 @@ test("auth sign-in and sign-out lifecycle works with session cookies", async (t)
     throw new Error("Expected authenticated session after sign-in.");
   }
 
+  assert.equal(signInPayload.data.tenant.slug, "demo-company");
+  assert.equal(signInPayload.data.user.tenantId, signInPayload.data.tenant.id);
   assert.equal(signInPayload.data.user.username, "editor");
   assert.equal(signInPayload.data.role.name, "Editor");
 
@@ -197,13 +199,9 @@ test("API enforces permissions and supports workspace, document and ticket flows
   const documentsResponse = await guestClient.request<{ documents: Document[] }>(
     `/workspaces/${workspaceId}/documents`
   );
-  assert.equal(documentsResponse.status, 200);
-  const documentsPayload = expectSuccess(documentsResponse.payload);
-  assert.ok(
-    documentsPayload.data.documents.some((document) => document.slug === "qa-board")
-  );
+  assert.equal(documentsResponse.status, 401);
 
-  const usersResponse = await guestClient.request<{ users: User[] }>("/users");
+  const usersResponse = await adminClient.request<{ users: User[] }>("/users");
   assert.equal(usersResponse.status, 200);
   const usersPayload = expectSuccess(usersResponse.payload);
   const assignee = usersPayload.data.users.find((user) => user.username === "viewer");
@@ -261,10 +259,7 @@ test("API enforces permissions and supports workspace, document and ticket flows
   const ticketsResponse = await guestClient.request<{ tickets: Ticket[] }>(
     `/workspaces/${workspaceId}/tickets`
   );
-  assert.equal(ticketsResponse.status, 200);
-  const ticketsPayload = expectSuccess(ticketsResponse.payload);
-  assert.equal(ticketsPayload.data.tickets.length, 1);
-  assert.equal(ticketsPayload.data.tickets[0]?.status, "Done");
+  assert.equal(ticketsResponse.status, 401);
 });
 
 test("invitation acceptance and password reset flow works end to end", async (t) => {
@@ -331,6 +326,10 @@ test("invitation acceptance and password reset flow works end to end", async (t)
     throw new Error("Expected accepted invite to create an authenticated session.");
   }
 
+  assert.equal(
+    acceptedUserPayload.data.user.tenantId,
+    acceptedUserPayload.data.tenant.id
+  );
   assert.equal(acceptedUserPayload.data.user.email, "alicia@example.com");
 
   await expectSuccessStatus(
@@ -391,6 +390,189 @@ test("invitation acceptance and password reset flow works end to end", async (t)
   assert.equal(newPasswordResponse.status, 200);
   const newPasswordPayload = expectSuccess(newPasswordResponse.payload);
   assert.equal(newPasswordPayload.data.authType, "session");
+});
+
+test("API isolates tenants across workspaces, users, documents and tickets", async (t) => {
+  const { tempDir, createClient } = await createApiHarness(t);
+  const demoAdminClient = createClient();
+  const acmeAdminClient = createClient();
+
+  await expectSuccessStatus(
+    demoAdminClient.request<AuthState>("/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify({
+        identifier: "admin",
+        password: "plainbase123"
+      })
+    }),
+    200
+  );
+
+  await expectSuccessStatus(
+    acmeAdminClient.request<AuthState>("/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify({
+        identifier: "acme-admin",
+        password: "plainbase123"
+      })
+    }),
+    200
+  );
+
+  const demoWorkspaceResponse = await demoAdminClient.request<{ workspace: Workspace }>(
+    "/workspaces",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Demo Tenant Workspace",
+        slug: "demo-tenant-workspace",
+        rootPath: join(tempDir, "demo-tenant-workspace")
+      })
+    }
+  );
+  assert.equal(demoWorkspaceResponse.status, 201);
+  const demoWorkspace = expectSuccess(demoWorkspaceResponse.payload).data.workspace;
+
+  const demoDocumentResponse = await demoAdminClient.request<{ document: Document }>(
+    "/documents",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: demoWorkspace.id,
+        title: "Tenant Secret",
+        slug: "tenant-secret",
+        content: "# Internal"
+      })
+    }
+  );
+  assert.equal(demoDocumentResponse.status, 201);
+  const demoDocument = expectSuccess(demoDocumentResponse.payload).data.document;
+
+  const demoUsersResponse = await demoAdminClient.request<{ users: User[] }>("/users");
+  assert.equal(demoUsersResponse.status, 200);
+  const demoUsers = expectSuccess(demoUsersResponse.payload).data.users;
+  assert.ok(demoUsers.every((user) => user.tenantId === demoWorkspace.tenantId));
+  const demoAssignee = demoUsers.find((user) => user.username === "viewer");
+  assert.ok(demoAssignee);
+
+  const demoTicketResponse = await demoAdminClient.request<{ ticket: Ticket }>(
+    "/tickets",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: demoWorkspace.id,
+        documentId: demoDocument.id,
+        title: "Tenant ticket",
+        description: "Should stay isolated.",
+        assigneeId: demoAssignee.id
+      })
+    }
+  );
+  assert.equal(demoTicketResponse.status, 201);
+  const demoTicket = expectSuccess(demoTicketResponse.payload).data.ticket;
+
+  const acmeWorkspacesResponse = await acmeAdminClient.request<{ workspaces: Workspace[] }>(
+    "/workspaces"
+  );
+  assert.equal(acmeWorkspacesResponse.status, 200);
+  const acmeWorkspaces = expectSuccess(acmeWorkspacesResponse.payload).data.workspaces;
+  assert.ok(
+    acmeWorkspaces.every((workspace) => workspace.tenantId !== demoWorkspace.tenantId)
+  );
+  assert.equal(
+    acmeWorkspaces.some((workspace) => workspace.id === demoWorkspace.id),
+    false
+  );
+
+  const acmeUsersResponse = await acmeAdminClient.request<{ users: User[] }>("/users");
+  assert.equal(acmeUsersResponse.status, 200);
+  const acmeUsers = expectSuccess(acmeUsersResponse.payload).data.users;
+  assert.ok(acmeUsers.every((user) => user.tenantId !== demoWorkspace.tenantId));
+
+  const acmeWorkspaceResponse = await acmeAdminClient.request<{ workspace: Workspace }>(
+    "/workspaces",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Acme Workspace",
+        slug: "acme-workspace",
+        rootPath: join(tempDir, "acme-workspace")
+      })
+    }
+  );
+  assert.equal(acmeWorkspaceResponse.status, 201);
+  const acmeWorkspace = expectSuccess(acmeWorkspaceResponse.payload).data.workspace;
+
+  const forbiddenWorkspaceRead = await acmeAdminClient.request<{ documents: Document[] }>(
+    `/workspaces/${demoWorkspace.id}/documents`
+  );
+  assert.equal(forbiddenWorkspaceRead.status, 404);
+
+  const forbiddenDocumentRead = await acmeAdminClient.request<{ document: Document }>(
+    `/documents/${demoDocument.id}`
+  );
+  assert.equal(forbiddenDocumentRead.status, 404);
+
+  const forbiddenTicketRead = await acmeAdminClient.request<{ tickets: Ticket[] }>(
+    `/workspaces/${demoWorkspace.id}/tickets`
+  );
+  assert.equal(forbiddenTicketRead.status, 404);
+
+  const crossTenantTicketCreate = await acmeAdminClient.request<{ ticket: Ticket }>(
+    "/tickets",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: demoWorkspace.id,
+        title: "Cross tenant attack",
+        description: "Should not work."
+      })
+    }
+  );
+  assert.equal(crossTenantTicketCreate.status, 404);
+
+  const crossTenantTicketUpdate = await acmeAdminClient.request<{ ticket: Ticket }>(
+    `/tickets/${demoTicket.id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        status: "Done"
+      })
+    }
+  );
+  assert.equal(crossTenantTicketUpdate.status, 404);
+
+  const crossTenantDocumentUpdate = await acmeAdminClient.request<{ document: Document }>(
+    `/documents/${demoDocument.id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        title: "Compromised"
+      })
+    }
+  );
+  assert.equal(crossTenantDocumentUpdate.status, 404);
+
+  const crossTenantUserDelete = await acmeAdminClient.request<{
+    deletedUserId: string;
+  }>(`/users/${demoAssignee.id}`, {
+    method: "DELETE"
+  });
+  assert.equal(crossTenantUserDelete.status, 404);
+
+  const crossTenantAssignment = await acmeAdminClient.request<{ ticket: Ticket }>(
+    "/tickets",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        workspaceId: acmeWorkspace.id,
+        title: "Wrong assignee",
+        description: "Should reject cross-tenant user ids.",
+        assigneeId: demoAssignee.id
+      })
+    }
+  );
+  assert.equal(crossTenantAssignment.status, 404);
 });
 
 async function createApiHarness(t: TestContext) {

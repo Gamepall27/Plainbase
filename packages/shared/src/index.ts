@@ -66,6 +66,7 @@ export type DatabaseSummary = {
   type: "sqlite";
   path: string;
   seeded: boolean;
+  tenantCount: number;
   workspaceCount: number;
   documentCount: number;
   userCount: number;
@@ -74,8 +75,17 @@ export type DatabaseSummary = {
   ticketCount: number;
 };
 
+export type Tenant = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Workspace = {
   id: string;
+  tenantId: string;
   name: string;
   slug: string;
   rootPath: string;
@@ -103,6 +113,7 @@ export type Document = {
 
 export type User = {
   id: string;
+  tenantId: string;
   name: string;
   username: string;
   email: string;
@@ -138,6 +149,7 @@ export type Ticket = {
 };
 
 export type DemoDataResponse = {
+  tenants: Tenant[];
   workspaces: Workspace[];
   documents: Document[];
   users: User[];
@@ -216,6 +228,7 @@ export type DeleteDocumentResponse = ApiSuccessResponse<{
 
 export type SessionAuth = {
   authType: "session";
+  tenant: Tenant;
   user: User;
   role: Role;
   session: {
@@ -225,6 +238,7 @@ export type SessionAuth = {
 
 export type GuestAuth = {
   authType: "guest";
+  tenant: null;
   user: null;
   role: null;
   session: null;
@@ -278,6 +292,7 @@ export type ResetPasswordResponse = ApiSuccessResponse<{
 
 export type Invitation = {
   id: string;
+  tenantId: string;
   name: string;
   username: string;
   email: string;

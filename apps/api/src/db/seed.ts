@@ -4,14 +4,33 @@ import type {
   Addon,
   Document,
   Role,
+  Tenant,
   Ticket,
   User,
   Workspace
 } from "@plainbase/shared";
 
+const tenants: Tenant[] = [
+  {
+    id: "tenant-demo-company",
+    name: "Demo Company",
+    slug: "demo-company",
+    createdAt: "2026-01-10T09:00:00.000Z",
+    updatedAt: "2026-01-10T09:00:00.000Z"
+  },
+  {
+    id: "tenant-acme-industrial",
+    name: "Acme Industrial",
+    slug: "acme-industrial",
+    createdAt: "2026-01-11T09:00:00.000Z",
+    updatedAt: "2026-01-11T09:00:00.000Z"
+  }
+];
+
 const workspaces: Workspace[] = [
   {
     id: "workspace-demo-company",
+    tenantId: "tenant-demo-company",
     name: "Demo Company Workspace",
     slug: "demo-company",
     rootPath: "",
@@ -29,6 +48,7 @@ const roles: Role[] = [
 const users: User[] = [
   {
     id: "user-admin",
+    tenantId: "tenant-demo-company",
     name: "Admin User",
     username: "admin",
     email: "admin@demo-company.local",
@@ -37,6 +57,7 @@ const users: User[] = [
   },
   {
     id: "user-editor",
+    tenantId: "tenant-demo-company",
     name: "Editor User",
     username: "editor",
     email: "editor@demo-company.local",
@@ -45,11 +66,21 @@ const users: User[] = [
   },
   {
     id: "user-viewer",
+    tenantId: "tenant-demo-company",
     name: "Viewer User",
     username: "viewer",
     email: "viewer@demo-company.local",
     roleId: "role-viewer",
     avatarUrl: "https://i.pravatar.cc/96?u=user-viewer"
+  },
+  {
+    id: "user-acme-admin",
+    tenantId: "tenant-acme-industrial",
+    name: "Acme Admin",
+    username: "acme-admin",
+    email: "admin@acme-industrial.local",
+    roleId: "role-admin",
+    avatarUrl: "https://i.pravatar.cc/96?u=user-acme-admin"
   }
 ];
 
@@ -169,9 +200,10 @@ const addons: Addon[] = [
 
 export function seedDatabase(database: DatabaseSync) {
   const insertWorkspace = database.prepare(`
-    INSERT INTO workspaces (id, name, slug, root_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO workspaces (id, tenant_id, name, slug, root_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
+      tenant_id = excluded.tenant_id,
       name = excluded.name,
       slug = excluded.slug,
       root_path = excluded.root_path,
@@ -184,10 +216,20 @@ export function seedDatabase(database: DatabaseSync) {
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name
   `);
-  const insertUser = database.prepare(`
-    INSERT INTO users (id, name, username, email, password_hash, role_id, avatar_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+  const insertTenant = database.prepare(`
+    INSERT INTO tenants (id, name, slug, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      slug = excluded.slug,
+      created_at = excluded.created_at,
+      updated_at = excluded.updated_at
+  `);
+  const insertUser = database.prepare(`
+    INSERT INTO users (id, tenant_id, name, username, email, password_hash, role_id, avatar_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      tenant_id = excluded.tenant_id,
       name = excluded.name,
       username = excluded.username,
       email = excluded.email,
@@ -269,9 +311,20 @@ export function seedDatabase(database: DatabaseSync) {
   database.exec("BEGIN");
 
   try {
+    for (const tenant of tenants) {
+      insertTenant.run(
+        tenant.id,
+        tenant.name,
+        tenant.slug,
+        tenant.createdAt,
+        tenant.updatedAt
+      );
+    }
+
     for (const workspace of workspaces) {
       insertWorkspace.run(
         workspace.id,
+        workspace.tenantId,
         workspace.name,
         workspace.slug,
         workspace.rootPath,
@@ -287,6 +340,7 @@ export function seedDatabase(database: DatabaseSync) {
     for (const user of users) {
       insertUser.run(
         user.id,
+        user.tenantId,
         user.name,
         user.username,
         user.email,

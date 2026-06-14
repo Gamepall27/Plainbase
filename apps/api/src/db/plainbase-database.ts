@@ -36,6 +36,7 @@ export class PlainbaseDatabase {
   }
 
   getSummary(): DatabaseSummary {
+    const tenantCount = this.countRows("tenants");
     const workspaceCount = this.countRows("workspaces");
     const documentCount = this.countRows("documents");
     const userCount = this.countRows("users");
@@ -47,12 +48,14 @@ export class PlainbaseDatabase {
       type: "sqlite",
       path: this.databasePath,
       seeded:
+        tenantCount > 0 &&
         workspaceCount > 0 &&
         documentCount > 0 &&
         userCount > 0 &&
         roleCount > 0 &&
         addonCount > 0 &&
         ticketCount > 0,
+      tenantCount,
       workspaceCount,
       documentCount,
       userCount,

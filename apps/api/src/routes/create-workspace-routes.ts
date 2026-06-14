@@ -10,11 +10,11 @@ import { isAdmin } from "@plainbase/shared";
 export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
   const router = Router();
 
-  router.get("/workspaces", (_request, response) => {
+  router.get("/workspaces", (request, response) => {
     const payload: WorkspacesResponse = {
       success: true,
       data: {
-        workspaces: workspaceService.listWorkspaces()
+        workspaces: workspaceService.listWorkspaces(request.auth)
       }
     };
 
@@ -28,7 +28,7 @@ export function createWorkspaceRoutes(workspaceService: WorkspaceService) {
       "The active user cannot create workspaces."
     ),
     (request, response) => {
-      const workspace = workspaceService.createWorkspace(request.body);
+      const workspace = workspaceService.createWorkspace(request.body, request.auth);
       const payload: WorkspaceResponse = {
         success: true,
         data: {

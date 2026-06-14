@@ -3,13 +3,24 @@ import { defaultDemoPassword, hashPassword } from "../auth/passwords.js";
 
 const schemaStatements = [
   `
+    CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `,
+  `
     CREATE TABLE IF NOT EXISTS workspaces (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
       root_path TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
     )
   `,
   `
@@ -21,11 +32,13 @@ const schemaStatements = [
   `
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
       name TEXT NOT NULL,
       username TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       role_id TEXT NOT NULL,
+      FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
       FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT
     )
   `,
@@ -81,6 +94,7 @@ const schemaStatements = [
   `
     CREATE TABLE IF NOT EXISTS user_invitations (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
       name TEXT NOT NULL,
       username TEXT NOT NULL,
       email TEXT NOT NULL,
@@ -92,6 +106,7 @@ const schemaStatements = [
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       accepted_at TEXT,
+      FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
       FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE RESTRICT,
       FOREIGN KEY (invited_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
       FOREIGN KEY (accepted_user_id) REFERENCES users (id) ON DELETE SET NULL
@@ -211,8 +226,11 @@ export function applySchema(database: DatabaseSync) {
   migrateDocumentsTableForKanban(database);
 
   ensureColumn(database, "users", "username", "TEXT");
+  ensureColumn(database, "users", "tenant_id", "TEXT");
   ensureColumn(database, "users", "password_hash", "TEXT");
   ensureColumn(database, "users", "avatar_url", "TEXT");
+  ensureColumn(database, "workspaces", "tenant_id", "TEXT");
+  ensureColumn(database, "user_invitations", "tenant_id", "TEXT");
   ensureColumn(
     database,
     "workspaces",
@@ -238,6 +256,25 @@ export function applySchema(database: DatabaseSync) {
     "TEXT NOT NULL DEFAULT ''"
   );
   database.exec(`
+    UPDATE workspaces
+    SET tenant_id = 'tenant-demo-company'
+    WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''
+  `);
+  database.exec(`
+    UPDATE users
+    SET tenant_id = 'tenant-demo-company'
+    WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''
+  `);
+  database.exec(`
+    UPDATE user_invitations
+    SET tenant_id = (
+      SELECT tenant_id
+      FROM users
+      WHERE users.id = user_invitations.invited_by_user_id
+    )
+    WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''
+  `);
+  database.exec(`
     UPDATE users
     SET username = LOWER(SUBSTR(email, 1, INSTR(email, '@') - 1))
     WHERE username IS NULL OR TRIM(username) = ''
@@ -248,12 +285,24 @@ export function applySchema(database: DatabaseSync) {
     WHERE password_hash IS NULL OR TRIM(password_hash) = ''
   `);
   database.exec(`
+    CREATE INDEX IF NOT EXISTS users_tenant_id_idx
+    ON users (tenant_id)
+  `);
+  database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx
     ON users (username)
   `);
   database.exec(`
+    CREATE INDEX IF NOT EXISTS workspaces_tenant_id_idx
+    ON workspaces (tenant_id)
+  `);
+  database.exec(`
     CREATE INDEX IF NOT EXISTS workspaces_root_path_idx
     ON workspaces (root_path)
+  `);
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS user_invitations_tenant_id_idx
+    ON user_invitations (tenant_id)
   `);
   database.exec(`
     UPDATE documents

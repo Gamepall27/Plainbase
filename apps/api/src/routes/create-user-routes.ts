@@ -17,11 +17,11 @@ export function createUserRoutes(
 ) {
   const router = Router();
 
-  router.get("/users", (_request, response) => {
+  router.get("/users", (request, response) => {
     const payload: UsersResponse = {
       success: true,
       data: {
-        users: userService.listUsers()
+        users: userService.listUsers(request.auth)
       }
     };
 
@@ -38,7 +38,7 @@ export function createUserRoutes(
       const payload: UserResponse = {
         success: true,
         data: {
-          user: userService.createUser(request.body)
+          user: userService.createUser(request.body, request.auth)
         }
       };
 
@@ -57,7 +57,7 @@ export function createUserRoutes(
       const payload: UserResponse = {
         success: true,
         data: {
-          user: userService.updateUser(userId, request.body)
+          user: userService.updateUser(userId, request.body, request.auth)
         }
       };
 

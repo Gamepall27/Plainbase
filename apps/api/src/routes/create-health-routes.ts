@@ -37,8 +37,8 @@ export function createHealthRoutes(dependencies: HealthRouteDependencies) {
     response.json(contentStore.getSummary());
   });
 
-  router.get("/demo-data", (_request, response) => {
-    response.json(services.demoDataService.getDemoData());
+  router.get("/demo-data", (request, response) => {
+    response.json(services.demoDataService.getDemoData(request.auth));
   });
 
   return router;
