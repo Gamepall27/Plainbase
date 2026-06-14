@@ -24,6 +24,9 @@ copyRequiredDirectory("apps/web/dist");
 copyRequiredDirectory("packages/shared/dist");
 copyRequiredDirectory("packages/addon-sdk/dist");
 copyOptionalDirectory("ops/self-hosted");
+copyOptionalFile("LICENSE");
+copyOptionalFile("NOTICE");
+copyOptionalFile("THIRD_PARTY_NOTICES.md");
 copyOptionalFile("README.md");
 copyOptionalFile("docs/self-hosted.md");
 
