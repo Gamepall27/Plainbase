@@ -1024,6 +1024,39 @@ export function useWorkspaceApp() {
     }
   }
 
+  async function importWorkspace(workspaceId: string) {
+    setWorkspaceMutationStatus({ status: "saving" });
+
+    try {
+      const documents = await apiClient.importWorkspace(workspaceId);
+
+      if (selectedWorkspaceId === workspaceId) {
+        setDocumentsState({ status: "success", data: documents });
+        const syncedTabs = syncTabsForWorkspace(
+          openTabsRef.current,
+          workspaceId,
+          documents
+        );
+        updateTabs(
+          syncedTabs,
+          resolveActiveTabId(activeTabIdRef.current, syncedTabs)
+        );
+      }
+
+      setWorkspaceMutationStatus({
+        status: "success",
+        message: `${documents.length} Eintraege wurden aus dem Workspace importiert.`
+      });
+      return true;
+    } catch (error) {
+      setWorkspaceMutationStatus({
+        status: "error",
+        message: getErrorMessage(error)
+      });
+      return false;
+    }
+  }
+
   async function deleteWorkspace(workspaceId: string) {
     setWorkspaceMutationStatus({ status: "saving" });
 
@@ -1200,6 +1233,7 @@ export function useWorkspaceApp() {
       deleteUser,
       createWorkspace,
       updateWorkspace,
+      importWorkspace,
       deleteWorkspace
     }
   };

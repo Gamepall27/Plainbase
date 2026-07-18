@@ -40,6 +40,10 @@ export class DocumentService {
     return this.documentRepository.listByWorkspaceId(workspaceId);
   }
 
+  importWorkspace(workspaceId: string, actor: AuthContext) {
+    return this.listDocumentsByWorkspace(workspaceId, actor);
+  }
+
   getDocument(documentId: string, actor: AuthContext) {
     const document = this.requireDocument(documentId);
     const workspace = this.requireWorkspace(document.workspaceId, actor);

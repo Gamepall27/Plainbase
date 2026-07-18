@@ -44,6 +44,7 @@ type AdminToolsPanelProps = {
     slug: string;
     rootPath?: string | null;
   }) => Promise<boolean>;
+  onWorkspaceImport: (workspaceId: string) => Promise<boolean>;
   onWorkspaceDelete: (workspaceId: string) => Promise<boolean>;
   onWorkspaceUpdate: (
     workspaceId: string,
@@ -68,6 +69,7 @@ export function AdminToolsPanel({
   onUserUpdate,
   onUserDelete,
   onWorkspaceCreate,
+  onWorkspaceImport,
   onWorkspaceDelete,
   onWorkspaceUpdate
 }: AdminToolsPanelProps) {
@@ -288,8 +290,8 @@ export function AdminToolsPanel({
               <div>
                 <h3>Workspace anlegen</h3>
                 <p className="sidebar-copy">
-                  Ohne Pfadangabe wird automatisch ein Ordner im konfigurierten
-                  Content-Root angelegt.
+                  Ein vorhandener Ordner wird beim Anlegen automatisch mit seiner
+                  Unterordner- und Markdown-Struktur importiert.
                 </p>
               </div>
             </div>
@@ -334,7 +336,7 @@ export function AdminToolsPanel({
               />
               <input
                 className="field"
-                placeholder="Pfad (optional), z. B. /Users/joshua/Wissensbasis/Team-A"
+                placeholder="Pfad oder smb://Server/Freigabe/Ordner (optional)"
                 value={workspaceFormState.rootPath}
                 onChange={(event) =>
                   setWorkspaceFormState((current) => ({
@@ -433,6 +435,14 @@ export function AdminToolsPanel({
                         </>
                       ) : (
                         <>
+                          <button
+                            type="button"
+                            className="inline-link-button"
+                            disabled={workspaceMutationStatus.status === "saving"}
+                            onClick={() => void onWorkspaceImport(workspace.id)}
+                          >
+                            Ordner importieren
+                          </button>
                           <button
                             type="button"
                             className="inline-link-button"

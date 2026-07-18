@@ -323,6 +323,7 @@ export function App() {
           onUserDelete={actions.deleteUser}
           onUserUpdate={actions.updateUser}
           onWorkspaceCreate={actions.createWorkspace}
+          onWorkspaceImport={actions.importWorkspace}
           onWorkspaceDelete={actions.deleteWorkspace}
           onWorkspaceUpdate={actions.updateWorkspace}
         />

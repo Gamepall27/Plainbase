@@ -104,6 +104,7 @@ type DocumentWorkspaceProps = {
     slug: string;
     rootPath?: string | null;
   }) => Promise<boolean>;
+  onWorkspaceImport: (workspaceId: string) => Promise<boolean>;
   onWorkspaceDelete: (workspaceId: string) => Promise<boolean>;
   onWorkspaceUpdate: (
     workspaceId: string,
@@ -152,6 +153,7 @@ export function DocumentWorkspace({
   onUserDelete,
   onUserUpdate,
   onWorkspaceCreate,
+  onWorkspaceImport,
   onWorkspaceDelete,
   onWorkspaceUpdate
 }: DocumentWorkspaceProps) {
@@ -280,6 +282,7 @@ export function DocumentWorkspace({
           onUserUpdate={onUserUpdate}
           onUserDelete={onUserDelete}
           onWorkspaceCreate={onWorkspaceCreate}
+          onWorkspaceImport={onWorkspaceImport}
           onWorkspaceDelete={onWorkspaceDelete}
           onWorkspaceUpdate={onWorkspaceUpdate}
         />

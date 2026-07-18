@@ -384,6 +384,23 @@ test("workspace creation imports existing folder and markdown structure immediat
   assert.equal(guidesDocument.parentId, handbookDocument.id);
   assert.equal(introDocument.parentId, handbookDocument.id);
   assert.equal(deepDiveDocument.parentId, guidesDocument.id);
+
+  const referenceRoot = join(workspaceRoot, "Reference");
+  mkdirSync(referenceRoot, { recursive: true });
+  writeFileSync(join(referenceRoot, "Glossary.md"), "# Glossary\n", "utf8");
+
+  const importResponse = await adminClient.request<{ documents: Document[] }>(
+    `/workspaces/${workspace.id}/import`,
+    { method: "POST" }
+  );
+  assert.equal(importResponse.status, 200);
+  const importedAfterRefresh = expectSuccess(importResponse.payload).data.documents;
+  assert.equal(
+    importedAfterRefresh.some(
+      (document) => document.filePath === "Reference/Glossary.md"
+    ),
+    true
+  );
 });
 
 test("workspace path updates resync content and workspace deletion removes it from plainbase", async (t) => {

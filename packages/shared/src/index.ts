@@ -204,6 +204,10 @@ export type DeleteWorkspaceResponse = ApiSuccessResponse<{
   deletedWorkspaceId: string;
 }>;
 
+export type ImportWorkspaceResponse = ApiSuccessResponse<{
+  documents: Document[];
+}>;
+
 export type CreateDocumentRequest = {
   workspaceId: string;
   parentId?: string | null;

@@ -1,5 +1,6 @@
 import type {
   DeleteWorkspaceResponse,
+  ImportWorkspaceResponse,
   WorkspaceResponse,
   WorkspacesResponse,
   UpdateWorkspaceRequest,
@@ -66,6 +67,25 @@ export function createWorkspaceRoutes(
         success: true,
         data: {
           workspace
+        }
+      };
+
+      response.json(payload);
+    }
+  );
+
+  router.post(
+    "/workspaces/:workspaceId/import",
+    requirePermission(
+      isAdmin,
+      "The active user cannot import workspace contents."
+    ),
+    (request, response) => {
+      const workspaceId = readRouteParam(request.params, "workspaceId");
+      const payload: ImportWorkspaceResponse = {
+        success: true,
+        data: {
+          documents: documentService.importWorkspace(workspaceId, request.auth)
         }
       };
 

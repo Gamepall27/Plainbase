@@ -16,6 +16,7 @@ import type {
   DocumentResponse,
   DocumentsResponse,
   InvitationResponse,
+  ImportWorkspaceResponse,
   OnboardingResponse,
   PasswordResetRequest,
   PasswordResetRequestResponse,
@@ -75,6 +76,10 @@ export const apiClient = {
       headers: jsonHeaders,
       body: JSON.stringify(payload)
     }).then((response) => response.data.workspace),
+  importWorkspace: (workspaceId: string) =>
+    request<ImportWorkspaceResponse>(`/api/workspaces/${workspaceId}/import`, {
+      method: "POST"
+    }).then((response) => response.data.documents),
   deleteWorkspace: (workspaceId: string) =>
     request<DeleteWorkspaceResponse>(`/api/workspaces/${workspaceId}`, {
       method: "DELETE"
