@@ -291,7 +291,8 @@ export function AdminToolsPanel({
                 <h3>Workspace anlegen</h3>
                 <p className="sidebar-copy">
                   Ein vorhandener Ordner wird beim Anlegen automatisch mit seiner
-                  Unterordner- und Markdown-Struktur importiert.
+                  Unterordner- und Markdown-Struktur importiert. SMB-Pfade muessen
+                  vorher im Finder eingebunden sein.
                 </p>
               </div>
             </div>

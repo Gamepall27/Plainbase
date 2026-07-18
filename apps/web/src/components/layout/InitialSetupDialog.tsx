@@ -161,7 +161,7 @@ export function InitialSetupDialog({
           />
           <input
             className="field"
-            placeholder="Workspace-Pfad (optional)"
+            placeholder="Workspace-Pfad oder smb://Server/Freigabe/Ordner (optional)"
             value={formState.workspaceRootPath}
             onChange={(event) =>
               setFormState((current) => ({

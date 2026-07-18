@@ -248,7 +248,7 @@ export function OnboardingGuide({
               />
               <input
                 className="field"
-                placeholder="Pfad (optional), z. B. /Users/joshua/Wissensbasis/Team-A"
+                placeholder="Pfad oder smb://Server/Freigabe/Ordner (optional)"
                 value={workspaceFormState.rootPath}
                 onChange={(event) =>
                   setWorkspaceFormState((current) => ({

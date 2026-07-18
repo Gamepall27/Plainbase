@@ -21,6 +21,14 @@ test("getErrorMessage unwraps api, generic and unknown errors", () => {
     getErrorMessage(new ApiClientError(403, "Nicht erlaubt.")),
     "Nicht erlaubt."
   );
+  assert.equal(
+    getErrorMessage(
+      new ApiClientError(422, "Validation failed.", {
+        details: { rootPath: "SMB-Freigabe ist nicht eingebunden." }
+      })
+    ),
+    "SMB-Freigabe ist nicht eingebunden."
+  );
   assert.equal(getErrorMessage(new Error("Kaputt.")), "Kaputt.");
   assert.equal(getErrorMessage("unexpected"), "Unbekannter Fehler.");
 });
