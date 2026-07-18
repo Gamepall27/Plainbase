@@ -16,7 +16,7 @@ export function notFoundHandler(request: Request, response: Response) {
 
 export function errorHandler(
   error: unknown,
-  _request: Request,
+  request: Request,
   response: Response,
   next: NextFunction
 ) {
@@ -52,7 +52,11 @@ export function errorHandler(
     return;
   }
 
-  console.error(error);
+  console.error("[api] unexpected server error", {
+    method: request.method,
+    path: request.originalUrl,
+    error: describeError(error)
+  });
 
   const payload: ApiErrorResponse = {
     success: false,
@@ -63,6 +67,18 @@ export function errorHandler(
   };
 
   response.status(500).json(payload);
+}
+
+function describeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    };
+  }
+
+  return error;
 }
 
 function isJsonParseError(error: unknown): error is SyntaxError & { status: number } {

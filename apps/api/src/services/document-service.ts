@@ -41,7 +41,36 @@ export class DocumentService {
   }
 
   importWorkspace(workspaceId: string, actor: AuthContext) {
-    return this.listDocumentsByWorkspace(workspaceId, actor);
+    const workspace = this.requireWorkspace(workspaceId, actor);
+    const startedAt = Date.now();
+    const workspaceRoot = this.documentFilesystemStore.getWorkspaceRoot(workspace);
+
+    console.info("[workspace-import] started", {
+      workspaceId: workspace.id,
+      workspaceRoot
+    });
+
+    try {
+      this.syncWorkspace(workspace);
+      const documents = this.documentRepository.listByWorkspaceId(workspaceId);
+
+      console.info("[workspace-import] completed", {
+        workspaceId: workspace.id,
+        workspaceRoot,
+        documentCount: documents.length,
+        durationMs: Date.now() - startedAt
+      });
+
+      return documents;
+    } catch (error) {
+      console.error("[workspace-import] failed", {
+        workspaceId: workspace.id,
+        workspaceRoot,
+        durationMs: Date.now() - startedAt,
+        error: describeError(error)
+      });
+      throw error;
+    }
   }
 
   getDocument(documentId: string, actor: AuthContext) {
@@ -575,4 +604,16 @@ function createUniqueImportedSlug(existingSlugs: Set<string>, baseSlug: string) 
   }
 
   return nextSlug;
+}
+
+function describeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    };
+  }
+
+  return error;
 }
